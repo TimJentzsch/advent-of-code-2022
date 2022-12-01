@@ -3,17 +3,13 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include "utils.hpp"
+
+#define IDENTIFIER "01"
 
 int main(int argc, char const *argv[])
 {
-  std::ifstream inputFile;
-  inputFile.open("../../inputs/day_01.txt");
-
-  if (!inputFile)
-  {
-    std::cout << "The input file doesn't exist, make sure you create it at /inputs/day_01.txt" << std::endl;
-    std::exit(1);
-  }
+  std::ifstream inputFile = getInputFile(IDENTIFIER);
 
   std::vector<int> elfCalories;
   int curCalories = 0;
