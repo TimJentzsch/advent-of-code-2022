@@ -2,7 +2,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <bits/stdc++.h>
+#include <algorithm>
 
 int main(int argc, char const *argv[])
 {
