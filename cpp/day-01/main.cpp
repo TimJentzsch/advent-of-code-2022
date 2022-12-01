@@ -7,17 +7,21 @@
 int main(int argc, char const *argv[])
 {
   std::ifstream inputFile;
-  inputFile.open("input.txt");
+  inputFile.open("../../inputs/day_01.txt");
+
+  if (!inputFile)
+  {
+    std::cout << "The input file doesn't exist, make sure you create it at /inputs/day_01.txt" << std::endl;
+    std::exit(1);
+  }
 
   std::vector<int> elfCalories;
   int curCalories = 0;
 
   std::string line;
 
-  while (!inputFile.eof())
+  while (std::getline(inputFile, line))
   {
-    std::getline(inputFile, line);
-
     // An empty line means that the next inventory starts
     if (line.length() == 0)
     {
@@ -31,17 +35,15 @@ int main(int argc, char const *argv[])
     }
   }
 
-  inputFile.close();
-
   // Sort the calories in descending order
-  std::sort(elfCalories.begin(), elfCalories.end(), std::greater<int>());
+  std::sort(elfCalories.begin(), elfCalories.end(), std::greater<>());
 
   // Part 1 solution
-  std::cout << "Maximum calories: " << elfCalories[0] << "\n";
+  std::cout << "Part 1: " << elfCalories.at(0) << std::endl;
 
   // Part 2 solution
-  int topThreeCalories = elfCalories[0] + elfCalories[1] + elfCalories[2];
-  std::cout << "Top 3 calories: " << topThreeCalories << "\n";
+  int topThreeCalories = elfCalories.at(0) + elfCalories.at(1) + elfCalories.at(2);
+  std::cout << "Part 2: " << topThreeCalories << std::endl;
 
   return 0;
 }

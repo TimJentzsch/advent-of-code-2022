@@ -1,6 +1,3 @@
-# Don't push AoC inputs
-*.txt
-
 # Prerequisites
 *.d
 
