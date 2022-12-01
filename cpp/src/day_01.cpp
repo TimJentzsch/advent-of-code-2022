@@ -5,7 +5,7 @@
 #include <algorithm>
 #include "utils.hpp"
 
-#define IDENTIFIER "01"
+const std::string IDENTIFIER = "01";
 
 int main(int argc, char const *argv[])
 {
