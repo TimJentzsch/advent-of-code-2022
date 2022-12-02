@@ -22,7 +22,7 @@ enum RpsOutcome
   WIN = 6,
 };
 
-RpsShape getEnemyShape(char input)
+RpsShape parseEnemyShape(char input)
 {
   switch (input)
   {
@@ -38,7 +38,7 @@ RpsShape getEnemyShape(char input)
   }
 }
 
-RpsShape getMyShape(char input)
+RpsShape parseMyShape(char input)
 {
   switch (input)
   {
@@ -54,7 +54,7 @@ RpsShape getMyShape(char input)
   }
 }
 
-RpsOutcome getMyOutcome(RpsShape enemyShape, RpsShape myShape)
+RpsOutcome calculateMyOutcome(RpsShape enemyShape, RpsShape myShape)
 {
   if (enemyShape == myShape)
   {
@@ -71,26 +71,80 @@ RpsOutcome getMyOutcome(RpsShape enemyShape, RpsShape myShape)
   return RpsOutcome::WIN;
 }
 
+RpsOutcome parseMyOutcome(char input)
+{
+  switch (input)
+  {
+  case 'X':
+    return RpsOutcome::LOSS;
+  case 'Y':
+    return RpsOutcome::DRAW;
+  case 'Z':
+    return RpsOutcome::WIN;
+  default:
+    std::string inputStr(1, input);
+    throw std::runtime_error("'" + inputStr + "' is an invalid outcome for you.");
+  }
+}
+
+RpsShape calculateMyShape(RpsShape enemyShape, RpsOutcome myOutcome)
+{
+  if (myOutcome == RpsOutcome::DRAW)
+  {
+    return enemyShape;
+  }
+
+  if (myOutcome == RpsOutcome::LOSS)
+  {
+    switch (enemyShape)
+    {
+    case RpsShape::ROCK:
+      return RpsShape::SCISSORS;
+    case RpsShape::PAPER:
+      return RpsShape::ROCK;
+    case RpsShape::SCISSORS:
+      return RpsShape::PAPER;
+    }
+  }
+
+  switch (enemyShape)
+  {
+  case RpsShape::ROCK:
+    return RpsShape::PAPER;
+  case RpsShape::PAPER:
+    return RpsShape::SCISSORS;
+  case RpsShape::SCISSORS:
+    return RpsShape::ROCK;
+  }
+
+  // C++ cannot deduct that this is unreachable
+  throw std::runtime_error("Invalid combination");
+}
+
 // Who's gonna stop me?
 void tests()
 {
-  assert(getEnemyShape('A') == RpsShape::ROCK);
-  assert(getEnemyShape('B') == RpsShape::PAPER);
-  assert(getEnemyShape('C') == RpsShape::SCISSORS);
+  assert(parseEnemyShape('A') == RpsShape::ROCK);
+  assert(parseEnemyShape('B') == RpsShape::PAPER);
+  assert(parseEnemyShape('C') == RpsShape::SCISSORS);
 
-  assert(getMyShape('X') == RpsShape::ROCK);
-  assert(getMyShape('Y') == RpsShape::PAPER);
-  assert(getMyShape('Z') == RpsShape::SCISSORS);
+  assert(parseMyShape('X') == RpsShape::ROCK);
+  assert(parseMyShape('Y') == RpsShape::PAPER);
+  assert(parseMyShape('Z') == RpsShape::SCISSORS);
 
-  assert(getMyOutcome(RpsShape::ROCK, RpsShape::ROCK) == RpsOutcome::DRAW);
-  assert(getMyOutcome(RpsShape::ROCK, RpsShape::PAPER) == RpsOutcome::WIN);
-  assert(getMyOutcome(RpsShape::ROCK, RpsShape::SCISSORS) == RpsOutcome::LOSS);
-  assert(getMyOutcome(RpsShape::PAPER, RpsShape::ROCK) == RpsOutcome::LOSS);
-  assert(getMyOutcome(RpsShape::PAPER, RpsShape::PAPER) == RpsOutcome::DRAW);
-  assert(getMyOutcome(RpsShape::PAPER, RpsShape::SCISSORS) == RpsOutcome::WIN);
-  assert(getMyOutcome(RpsShape::SCISSORS, RpsShape::ROCK) == RpsOutcome::WIN);
-  assert(getMyOutcome(RpsShape::SCISSORS, RpsShape::PAPER) == RpsOutcome::LOSS);
-  assert(getMyOutcome(RpsShape::SCISSORS, RpsShape::SCISSORS) == RpsOutcome::DRAW);
+  assert(calculateMyOutcome(RpsShape::ROCK, RpsShape::ROCK) == RpsOutcome::DRAW);
+  assert(calculateMyOutcome(RpsShape::ROCK, RpsShape::PAPER) == RpsOutcome::WIN);
+  assert(calculateMyOutcome(RpsShape::ROCK, RpsShape::SCISSORS) == RpsOutcome::LOSS);
+  assert(calculateMyOutcome(RpsShape::PAPER, RpsShape::ROCK) == RpsOutcome::LOSS);
+  assert(calculateMyOutcome(RpsShape::PAPER, RpsShape::PAPER) == RpsOutcome::DRAW);
+  assert(calculateMyOutcome(RpsShape::PAPER, RpsShape::SCISSORS) == RpsOutcome::WIN);
+  assert(calculateMyOutcome(RpsShape::SCISSORS, RpsShape::ROCK) == RpsOutcome::WIN);
+  assert(calculateMyOutcome(RpsShape::SCISSORS, RpsShape::PAPER) == RpsOutcome::LOSS);
+  assert(calculateMyOutcome(RpsShape::SCISSORS, RpsShape::SCISSORS) == RpsOutcome::DRAW);
+
+  assert(parseMyOutcome('X') == RpsOutcome::LOSS);
+  assert(parseMyOutcome('Y') == RpsOutcome::DRAW);
+  assert(parseMyOutcome('Z') == RpsOutcome::WIN);
 }
 
 int main(int argc, char const *argv[])
@@ -100,7 +154,8 @@ int main(int argc, char const *argv[])
   std::ifstream inputFile = getInputFile(IDENTIFIER);
 
   std::string line;
-  u_int total_score = 0;
+  u_int total_score_part_1 = 0;
+  u_int total_score_part_2 = 0;
 
   while (std::getline(inputFile, line))
   {
@@ -109,16 +164,22 @@ int main(int argc, char const *argv[])
       char enemyChoice = line.at(0);
       char myChoice = line.at(2);
 
-      auto enemyShape = getEnemyShape(enemyChoice);
-      auto myShape = getMyShape(myChoice);
+      auto enemyShape = parseEnemyShape(enemyChoice);
 
-      auto outcome = getMyOutcome(enemyShape, myShape);
+      // Part 1
+      auto myParsedShape = parseMyShape(myChoice);
+      auto myCalculatedOutcome = calculateMyOutcome(enemyShape, myParsedShape);
+      total_score_part_1 += myParsedShape + myCalculatedOutcome;
 
-      total_score += myShape + outcome;
+      // Part 2
+      auto myParsedOutcome = parseMyOutcome(myChoice);
+      auto myCalculatedShape = calculateMyShape(enemyShape, myParsedOutcome);
+      total_score_part_2 += myCalculatedShape + myParsedOutcome;
     }
   }
 
-  std::cout << "Part 1: " << total_score << std::endl;
+  std::cout << "Part 1: " << total_score_part_1 << std::endl;
+  std::cout << "Part 2: " << total_score_part_2 << std::endl;
 
   return 0;
 }
