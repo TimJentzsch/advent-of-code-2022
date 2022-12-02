@@ -1,4 +1,4 @@
-CUR_DAY="01"
+CUR_DAY="02"
 
 # Determine the day to execute
 if [ $# -gt 0 ]
