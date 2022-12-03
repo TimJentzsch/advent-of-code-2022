@@ -8,13 +8,16 @@
 
 const std::string IDENTIFIER = "03";
 
-constexpr size_t ITEM_COUNT = 26 * 2;
+using Item = size_t;
+using Prio = size_t;
+constexpr Item ITEM_COUNT = 26 * 2;
+using Items = std::array<Item, ITEM_COUNT>;
 
 /**
  * The item index is the priority - 1.
  * `a` through `z` have intem indexes 0 through 25.
  */
-size_t inputToItemIndex(char input)
+Item inputToItemIndex(char input)
 {
   if (input >= 'a' && input <= 'z')
   {
@@ -29,10 +32,10 @@ size_t inputToItemIndex(char input)
   throw std::runtime_error("Invalid item input");
 }
 
-std::array<size_t, ITEM_COUNT> countCompartmentItems(std::string compartment)
+Items countCompartmentItems(std::string compartment)
 {
   // Apparently this will initialize everything to 0 (hopefully)
-  std::array<size_t, ITEM_COUNT> items = {0};
+  Items items = {0};
 
   for (size_t i = 0; i < compartment.size(); i++)
   {
@@ -44,11 +47,25 @@ std::array<size_t, ITEM_COUNT> countCompartmentItems(std::string compartment)
   return items;
 }
 
-size_t duplicateItemPriority(std::array<size_t, ITEM_COUNT> firstItemCounts, std::array<size_t, ITEM_COUNT> secondItemCounts)
+Prio duplicateItemPriority(Items firstItemCounts, Items secondItemCounts)
 {
-  for (size_t i = 0; i < firstItemCounts.size(); i++)
+  for (Item i = 0; i < firstItemCounts.size(); i++)
   {
     if (firstItemCounts.at(i) > 0 && secondItemCounts.at(i) > 0)
+    {
+      auto priority = i + 1;
+      return priority;
+    }
+  }
+
+  return 0;
+}
+
+Prio tripleItemPriority(Items firstItemCounts, Items secondItemCounts, Items thirdItemCounts)
+{
+  for (Item i = 0; i < firstItemCounts.size(); i++)
+  {
+    if (firstItemCounts.at(i) > 0 && secondItemCounts.at(i) > 0 && thirdItemCounts.at(i) > 0)
     {
       auto priority = i + 1;
       return priority;
@@ -79,10 +96,24 @@ int main(int argc, char const *argv[])
   std::string line;
 
   // Sum of the priorities of duplicate items
-  size_t part1Sum = 0;
+  Prio part1Sum = 0;
+  // Sum of priorities of key items
+  Prio part2Sum = 0;
+
+  // It's ugly but it works
+  // Will count how many rucksacks we have "collected"
+  size_t rucksackIndex = 0;
+  std::array<Items, 3> rucksacks;
 
   while (std::getline(inputFile, line))
   {
+    if (line.empty())
+    {
+      continue;
+    }
+
+    // PART 1
+
     auto length = line.size();
     // Devide the rucksack into the two compartments
     auto firstCompartment = line.substr(0, length / 2);
@@ -94,7 +125,22 @@ int main(int argc, char const *argv[])
 
     // Determine duplicate items
     part1Sum += duplicateItemPriority(firstItemCounts, secondItemCounts);
+
+    // PART 2
+
+    rucksacks[rucksackIndex] = countCompartmentItems(line);
+
+    if (rucksackIndex >= 2)
+    {
+      part2Sum += tripleItemPriority(rucksacks.at(0), rucksacks.at(1), rucksacks.at(2));
+      rucksackIndex = 0;
+    }
+    else
+    {
+      rucksackIndex += 1;
+    }
   }
 
   std::cout << "Part 1: " << part1Sum << std::endl;
+  std::cout << "Part 2: " << part2Sum << std::endl;
 }
