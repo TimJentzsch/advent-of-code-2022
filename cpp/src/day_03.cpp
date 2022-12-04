@@ -37,11 +37,9 @@ Items countCompartmentItems(std::string compartment)
   // Apparently this will initialize everything to 0 (hopefully)
   Items items = {0};
 
-  for (size_t i = 0; i < compartment.size(); i++)
+  for (auto &item : compartment)
   {
-    size_t index = inputToItemIndex(compartment.at(i));
-
-    items[index] += 1;
+    items[item] += 1;
   }
 
   return items;
