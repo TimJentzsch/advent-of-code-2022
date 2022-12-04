@@ -46,6 +46,11 @@ bool rangeContains(Range range1, Range range2)
   return range1.at(0) <= range2.at(0) && range1.at(1) >= range2.at(1);
 }
 
+bool rangeOverlaps(Range range1, Range range2)
+{
+  return range1.at(0) <= range2.at(1) && range1.at(1) >= range2.at(0) || range1.at(0) <= range2.at(1) && range1.at(1) >= range2.at(0);
+}
+
 void tests()
 {
   assert(rangeEquals(Range{1, 4}, Range{1, 4}));
@@ -57,6 +62,14 @@ void tests()
   assert(rangeContains(Range{1, 4}, Range{1, 3}));
   assert(!rangeContains(Range{2, 6}, Range{1, 6}));
   assert(!rangeContains(Range{2, 6}, Range{2, 7}));
+
+  assert(rangeOverlaps(Range{2, 6}, Range{1, 2}));
+  assert(rangeOverlaps(Range{2, 6}, Range{6, 7}));
+  assert(rangeOverlaps(Range{3, 5}, Range{1, 7}));
+  assert(rangeOverlaps(Range{3, 5}, Range{1, 4}));
+  assert(rangeOverlaps(Range{3, 5}, Range{4, 6}));
+  assert(!rangeOverlaps(Range{1, 3}, Range{4, 6}));
+  assert(!rangeContains(Range{4, 6}, Range{1, 3}));
 
   assert(rangeEquals(parseRange("2-4"), Range{2, 4}));
 
@@ -76,6 +89,7 @@ int main(int argc, char const *argv[])
   std::string line;
 
   size_t part1Count = 0;
+  size_t part2Count = 0;
 
   while (std::getline(inputFile, line))
   {
@@ -92,9 +106,14 @@ int main(int argc, char const *argv[])
     {
       part1Count += 1;
     }
+
+    if (rangeOverlaps(range1, range2))
+    {
+      part2Count += 1;
+    }
   }
   std::cout << "Part 1: " << part1Count << std::endl;
-  std::cout << "Part 2: " << std::endl;
+  std::cout << "Part 2: " << part2Count << std::endl;
 
   return 0;
 }
