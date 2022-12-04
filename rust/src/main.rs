@@ -4,16 +4,17 @@ use std::{env, process::exit};
 use day_01::Day01;
 use utils::Day;
 
-use crate::day_03::Day03;
+use crate::{day_03::Day03, day_04::Day04};
 
 mod day_01;
 mod day_03;
+mod day_04;
 mod utils;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let days: Vec<Box<dyn Day>> = vec![Box::new(Day01), Box::new(Day03)];
+    let days: Vec<Box<dyn Day>> = vec![Box::new(Day01), Box::new(Day03), Box::new(Day04)];
 
     let identifier = args
         .get(1)
