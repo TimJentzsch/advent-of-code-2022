@@ -22,9 +22,7 @@ fn find_marker(input: &str, marker_size: usize) -> usize {
 
     let sequence_count = chars
         .windows(marker_size)
-        .take_while(|sequence| {
-            HashSet::<char>::from_iter(sequence.iter().copied()).len() < marker_size
-        })
+        .take_while(|sequence| HashSet::<_>::from_iter(sequence.iter()).len() < marker_size)
         .count();
 
     // Add the sequence length to get the count of characters
