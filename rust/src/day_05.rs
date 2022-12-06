@@ -114,8 +114,8 @@ impl Supplies {
         self.0.iter().map(|stack| stack.len()).max().unwrap_or(0)
     }
 
-    fn apply_move(&mut self, r#move: Move) {
-        // Move the crates
+    /// Move the crates one-by-one
+    fn apply_move_part_1(&mut self, r#move: Move) {
         for _ in 0..r#move.count {
             let item = self
                 .0
@@ -124,6 +124,28 @@ impl Supplies {
                 .pop()
                 .expect("Not enough items on the crate stack");
 
+            self.0
+                .get_mut(r#move.to - 1)
+                .expect("Not enough crate stacks")
+                .push(item);
+        }
+    }
+
+    /// Move the crates together
+    fn apply_move_part_2(&mut self, r#move: Move) {
+        let mut crates_to_move = Vec::new();
+
+        for _ in 0..r#move.count {
+            crates_to_move.push(
+                self.0
+                    .get_mut(r#move.from - 1)
+                    .expect("Not enough crate stacks")
+                    .pop()
+                    .expect("Not enough items on the crate stack"),
+            );
+        }
+
+        for item in crates_to_move.into_iter().rev() {
             self.0
                 .get_mut(r#move.to - 1)
                 .expect("Not enough crate stacks")
@@ -165,7 +187,7 @@ impl Day for Day05 {
         let input = self.get_input();
 
         println!("Part 1: {}", part_1(&input));
-        println!("Part 2: TODO");
+        println!("Part 2: {}", part_2(&input));
     }
 }
 
@@ -181,7 +203,24 @@ fn part_1(input: &str) -> String {
         .skip(instruction_start_row)
         .filter(|line| !line.is_empty())
         .map(|line| line.parse::<Move>().unwrap())
-        .for_each(|r#move| supplies.apply_move(r#move));
+        .for_each(|r#move| supplies.apply_move_part_1(r#move));
+
+    supplies.top_crates()
+}
+
+fn part_2(input: &str) -> String {
+    let mut supplies = parse_supplies(input);
+
+    let max_size = supplies.max_size();
+    let instruction_start_row = max_size + 2;
+
+    // Parse the moves and apply them
+    input
+        .lines()
+        .skip(instruction_start_row)
+        .filter(|line| !line.is_empty())
+        .map(|line| line.parse::<Move>().unwrap())
+        .for_each(|r#move| supplies.apply_move_part_2(r#move));
 
     supplies.top_crates()
 }
@@ -257,6 +296,14 @@ move 1 from 1 to 2
     fn should_calculate_part_1_solution() {
         let expected = "CMZ".to_string();
         let actual = part_1(EXAMPLE_INPUT);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn should_calculate_part_2_solution() {
+        let expected = "MCD".to_string();
+        let actual = part_2(EXAMPLE_INPUT);
 
         assert_eq!(actual, expected);
     }
