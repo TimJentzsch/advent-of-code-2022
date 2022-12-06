@@ -1,20 +1,27 @@
 #![feature(iter_array_chunks)]
+#![feature(let_chains)]
 use std::{env, process::exit};
 
 use day_01::Day01;
 use utils::Day;
 
-use crate::{day_03::Day03, day_04::Day04};
+use crate::{day_03::Day03, day_04::Day04, day_05::Day05};
 
 mod day_01;
 mod day_03;
 mod day_04;
+mod day_05;
 mod utils;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let days: Vec<Box<dyn Day>> = vec![Box::new(Day01), Box::new(Day03), Box::new(Day04)];
+    let days: Vec<Box<dyn Day>> = vec![
+        Box::new(Day01),
+        Box::new(Day03),
+        Box::new(Day04),
+        Box::new(Day05),
+    ];
 
     let identifier = args
         .get(1)
