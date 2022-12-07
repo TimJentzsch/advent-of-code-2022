@@ -355,8 +355,37 @@ fn part_1(input: &str) -> usize {
         .sum()
 }
 
-fn part_2(_input: &str) -> usize {
-    0
+fn part_2(input: &str) -> usize {
+    let tree = Entry::Dir(parse_file_tree(input));
+
+    let available_space = 70000000;
+    let occupied_space = tree.size();
+    let remaining_space = available_space - occupied_space;
+    let needed_space = 30000000;
+    let space_to_clear = needed_space - remaining_space;
+
+    tree.all_entries()
+        .iter()
+        // Only consider directories
+        .filter_map(|entry| {
+            if let Entry::Dir(dir) = entry {
+                Some(dir)
+            } else {
+                None
+            }
+        })
+        // Find the directory sizes that are large enough
+        .filter_map(|dir| {
+            let size = dir.size();
+
+            if size >= space_to_clear {
+                Some(size)
+            } else {
+                None
+            }
+        })
+        .min()
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -416,5 +445,12 @@ $ ls
         let actual = part_1(EXAMPLE_INPUT);
 
         assert_eq!(actual, 95437);
+    }
+
+    #[test]
+    fn should_calculate_part_2_solution() {
+        let actual = part_2(EXAMPLE_INPUT);
+
+        assert_eq!(actual, 24933642);
     }
 }
