@@ -1,5 +1,6 @@
 #![feature(iter_array_chunks)]
 #![feature(let_chains)]
+#![feature(iter_intersperse)]
 use std::{env, process::exit};
 
 use day_01::Day01;
