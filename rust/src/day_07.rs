@@ -6,7 +6,6 @@ trait FileLike {
     fn name(&self) -> &str;
     fn size(&self) -> usize;
     fn get_by_name(&self, name: &str) -> Option<&Entry>;
-    fn get_by_path(&self, path: &[&str]) -> Option<&Entry>;
     fn get_mut_by_name(&mut self, name: &str) -> Option<&mut Entry>;
     fn get_mut_by_path(&mut self, path: &[&str]) -> Option<&mut Entry>;
     fn pretty_print(&self, indent: usize) -> String;
@@ -37,10 +36,6 @@ impl FileLike for File {
     }
 
     fn get_by_name(&self, _name: &str) -> Option<&Entry> {
-        None
-    }
-
-    fn get_by_path(&self, _path: &[&str]) -> Option<&Entry> {
         None
     }
 
@@ -110,18 +105,6 @@ impl FileLike for Dir {
 
     fn get_by_name(&self, name: &str) -> Option<&Entry> {
         self.entires.iter().find(|entry| entry.name() == name)
-    }
-
-    fn get_by_path(&self, path: &[&str]) -> Option<&Entry> {
-        if let Some(first) = path.first() && let Some(entry) = self.get_by_name(first) {
-            if path.len() == 1 {
-                Some(entry)
-            } else {
-                entry.get_by_path(&path[1..])
-            }
-        } else {
-            None
-        }
     }
 
     fn get_mut_by_name(&mut self, name: &str) -> Option<&mut Entry> {
@@ -208,13 +191,6 @@ impl FileLike for Entry {
         match self {
             Entry::File(file) => file.get_by_name(name),
             Entry::Dir(dir) => dir.get_by_name(name),
-        }
-    }
-
-    fn get_by_path(&self, path: &[&str]) -> Option<&Entry> {
-        match self {
-            Entry::File(file) => file.get_by_path(path),
-            Entry::Dir(dir) => dir.get_by_path(path),
         }
     }
 
