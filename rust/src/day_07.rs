@@ -68,7 +68,7 @@ impl Debug for File {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct Dir {
     name: String,
     entires: Vec<Entry>,
@@ -82,6 +82,7 @@ impl Dir {
         }
     }
 
+    #[cfg(test)]
     fn with_entries(mut self, entries: Vec<Entry>) -> Self {
         self.entires = entries;
         self
@@ -162,10 +163,30 @@ impl Debug for Dir {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum Entry {
     File(File),
     Dir(Dir),
+}
+
+impl Entry {
+    fn all_entries(&self) -> Vec<&Entry> {
+        match self {
+            Entry::File(_) => vec![self],
+            Entry::Dir(dir) => {
+                let mut children: Vec<&Entry> = dir
+                    .entires
+                    .iter()
+                    .flat_map(|entry| entry.all_entries())
+                    .collect();
+
+                let mut entries = vec![self];
+                entries.append(&mut children);
+
+                entries
+            }
+        }
+    }
 }
 
 impl FileLike for Entry {
@@ -323,8 +344,15 @@ fn parse_file_tree(input: &str) -> Dir {
     root
 }
 
-fn part_1(_input: &str) -> usize {
-    0
+fn part_1(input: &str) -> usize {
+    let tree = Entry::Dir(parse_file_tree(input));
+
+    tree.all_entries()
+        .iter()
+        .filter(|entry| matches!(entry, Entry::Dir(_)))
+        .map(|entry| entry.size())
+        .filter(|&size| size <= 100000)
+        .sum()
 }
 
 fn part_2(_input: &str) -> usize {
@@ -381,5 +409,12 @@ $ ls
         ]);
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn should_calculate_part_1_solution() {
+        let actual = part_1(EXAMPLE_INPUT);
+
+        assert_eq!(actual, 95437);
     }
 }
