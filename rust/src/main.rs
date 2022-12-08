@@ -6,7 +6,9 @@ use std::{env, process::exit};
 use day_01::Day01;
 use utils::Day;
 
-use crate::{day_03::Day03, day_04::Day04, day_05::Day05, day_06::Day06, day_07::Day07};
+use crate::{
+    day_03::Day03, day_04::Day04, day_05::Day05, day_06::Day06, day_07::Day07, day_08::Day08,
+};
 
 mod day_01;
 mod day_03;
@@ -14,6 +16,7 @@ mod day_04;
 mod day_05;
 mod day_06;
 mod day_07;
+mod day_08;
 mod utils;
 
 fn main() {
@@ -26,6 +29,7 @@ fn main() {
         Box::new(Day05),
         Box::new(Day06),
         Box::new(Day07),
+        Box::new(Day08),
     ];
 
     let identifier = args
