@@ -8,6 +8,7 @@ use utils::Day;
 
 use crate::{
     day_03::Day03, day_04::Day04, day_05::Day05, day_06::Day06, day_07::Day07, day_08::Day08,
+    day_09::Day09,
 };
 
 mod day_01;
@@ -17,6 +18,7 @@ mod day_05;
 mod day_06;
 mod day_07;
 mod day_08;
+mod day_09;
 mod utils;
 
 fn main() {
@@ -30,6 +32,7 @@ fn main() {
         Box::new(Day06),
         Box::new(Day07),
         Box::new(Day08),
+        Box::new(Day09),
     ];
 
     let identifier = args
