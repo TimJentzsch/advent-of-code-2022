@@ -129,32 +129,43 @@ impl Debug for Position {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
-struct Rope {
-    head: Position,
-    tail: Position,
-
+#[derive(Debug, PartialEq, Eq)]
+struct Rope<const L: usize> {
+    knots: [Position; L],
     visited_by_tail: HashSet<Position>,
 }
 
-impl Rope {
+impl<const L: usize> Rope<L> {
     #[cfg(test)]
-    fn new(head: Position, tail: Position) -> Self {
+    fn new(knots: [Position; L]) -> Self {
         let mut visited_by_tail = HashSet::new();
-        visited_by_tail.insert(tail);
+        visited_by_tail.insert(knots[L - 1]);
 
         Self {
-            head,
-            tail,
+            knots,
             visited_by_tail,
         }
     }
 
-    fn apply_motion(&mut self, motion: &Motion) -> &mut Self {
-        self.head.apply_motion(motion);
-        self.tail.follow(&self.head);
-        self.visited_by_tail.insert(self.tail);
+    #[cfg(test)]
+    fn head(&self) -> Position {
+        self.knots[0]
+    }
 
+    #[cfg(test)]
+    fn tail(&self) -> Position {
+        self.knots[L - 1]
+    }
+
+    fn apply_motion(&mut self, motion: &Motion) -> &mut Self {
+        self.knots[0].apply_motion(motion);
+
+        for idx in 1..L {
+            let to_follow = self.knots[idx - 1];
+            self.knots[idx].follow(&to_follow);
+        }
+
+        self.visited_by_tail.insert(self.knots[L - 1]);
         self
     }
 
@@ -168,6 +179,15 @@ impl Rope {
 
     fn visited_by_tail_count(&self) -> usize {
         self.visited_by_tail.len()
+    }
+}
+
+impl<const L: usize> Default for Rope<L> {
+    fn default() -> Self {
+        Self {
+            knots: [Position::default(); L],
+            visited_by_tail: HashSet::default(),
+        }
     }
 }
 
@@ -187,7 +207,7 @@ impl Day for Day09 {
 }
 
 fn part_1(input: &str) -> usize {
-    let mut rope = Rope::default();
+    let mut rope = Rope::<2>::default();
 
     for line in input.trim().lines() {
         let instruction: Instruction = line.parse().unwrap();
@@ -197,15 +217,22 @@ fn part_1(input: &str) -> usize {
     rope.visited_by_tail_count()
 }
 
-fn part_2(_input: &str) -> usize {
-    0
+fn part_2(input: &str) -> usize {
+    let mut rope = Rope::<10>::default();
+
+    for line in input.trim().lines() {
+        let instruction: Instruction = line.parse().unwrap();
+        rope.apply_instruction(&instruction);
+    }
+
+    rope.visited_by_tail_count()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const EXAMPLE_INPUT: &'static str = "R 4
+    const EXAMPLE_INPUT_1: &'static str = "R 4
 U 4
 L 3
 D 1
@@ -215,9 +242,19 @@ L 5
 R 2
 ";
 
+    const EXAMPLE_INPUT_2: &'static str = "R 5
+U 8
+L 8
+D 3
+R 17
+D 10
+L 25
+U 20
+";
+
     #[test]
     fn should_calculate_part_1_solution() {
-        let actual = part_1(EXAMPLE_INPUT);
+        let actual = part_1(EXAMPLE_INPUT_1);
 
         assert_eq!(actual, 13);
     }
@@ -254,61 +291,68 @@ R 2
 
     #[test]
     fn should_apply_instructions() {
-        let mut rope = Rope::default();
+        let mut rope = Rope::<2>::default();
 
         // R 4
         rope.apply_instruction(&Instruction::new(Motion::Right, 4));
-        assert_eq!(rope.head, Position::new(4, 0));
-        assert_eq!(rope.tail, Position::new(3, 0));
+        assert_eq!(rope.head(), Position::new(4, 0));
+        assert_eq!(rope.tail(), Position::new(3, 0));
         assert_eq!(rope.visited_by_tail_count(), 4);
 
         // U 4
         rope.apply_instruction(&Instruction::new(Motion::Up, 4));
-        assert_eq!(rope.head, Position::new(4, 4));
-        assert_eq!(rope.tail, Position::new(4, 3));
+        assert_eq!(rope.head(), Position::new(4, 4));
+        assert_eq!(rope.tail(), Position::new(4, 3));
         assert_eq!(rope.visited_by_tail_count(), 7);
 
         // L 3
         rope.apply_instruction(&Instruction::new(Motion::Left, 3));
-        assert_eq!(rope.head, Position::new(1, 4));
-        assert_eq!(rope.tail, Position::new(2, 4));
+        assert_eq!(rope.head(), Position::new(1, 4));
+        assert_eq!(rope.tail(), Position::new(2, 4));
         assert_eq!(rope.visited_by_tail_count(), 9);
 
         // D 1
         rope.apply_instruction(&Instruction::new(Motion::Down, 1));
-        assert_eq!(rope.head, Position::new(1, 3));
-        assert_eq!(rope.tail, Position::new(2, 4));
+        assert_eq!(rope.head(), Position::new(1, 3));
+        assert_eq!(rope.tail(), Position::new(2, 4));
         assert_eq!(rope.visited_by_tail_count(), 9);
 
         // R 4
         rope.apply_instruction(&Instruction::new(Motion::Right, 4));
-        assert_eq!(rope.head, Position::new(5, 3));
-        assert_eq!(rope.tail, Position::new(4, 3));
+        assert_eq!(rope.head(), Position::new(5, 3));
+        assert_eq!(rope.tail(), Position::new(4, 3));
         assert_eq!(rope.visited_by_tail_count(), 10);
 
         // D 1
         rope.apply_instruction(&Instruction::new(Motion::Down, 1));
-        assert_eq!(rope.head, Position::new(5, 2));
-        assert_eq!(rope.tail, Position::new(4, 3));
+        assert_eq!(rope.head(), Position::new(5, 2));
+        assert_eq!(rope.tail(), Position::new(4, 3));
         assert_eq!(rope.visited_by_tail_count(), 10);
 
         // L 5
         rope.apply_instruction(&Instruction::new(Motion::Left, 5));
-        assert_eq!(rope.head, Position::new(0, 2));
-        assert_eq!(rope.tail, Position::new(1, 2));
+        assert_eq!(rope.head(), Position::new(0, 2));
+        assert_eq!(rope.tail(), Position::new(1, 2));
         assert_eq!(rope.visited_by_tail_count(), 13);
 
         // R 2
         rope.apply_instruction(&Instruction::new(Motion::Right, 2));
-        assert_eq!(rope.head, Position::new(2, 2));
-        assert_eq!(rope.tail, Position::new(1, 2));
+        assert_eq!(rope.head(), Position::new(2, 2));
+        assert_eq!(rope.tail(), Position::new(1, 2));
         assert_eq!(rope.visited_by_tail_count(), 13);
     }
 
     #[test]
-    fn should_calculate_part_2_solution() {
-        let actual = part_2(EXAMPLE_INPUT);
+    fn should_calculate_part_2_solution_example_1() {
+        let actual = part_2(EXAMPLE_INPUT_1);
 
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 1);
+    }
+
+    #[test]
+    fn should_calculate_part_2_solution_example_2() {
+        let actual = part_2(EXAMPLE_INPUT_2);
+
+        assert_eq!(actual, 36);
     }
 }
