@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use crate::utils::Day;
 
@@ -65,15 +65,16 @@ impl FromStr for Program {
 }
 
 #[derive(Debug)]
-struct ClockCircuit {
+struct ClockCircuit<const W: usize, const H: usize> {
     program: Program,
     program_counter: usize,
     cycle_counter: usize,
     x: i64,
     buffer: Option<(Instruction, usize)>,
+    crt: [[bool; W]; H],
 }
 
-impl ClockCircuit {
+impl<const W: usize, const H: usize> ClockCircuit<W, H> {
     fn new(program: Program) -> Self {
         Self {
             program,
@@ -81,6 +82,7 @@ impl ClockCircuit {
             cycle_counter: 0,
             x: 1,
             buffer: None,
+            crt: [[false; W]; H],
         }
     }
 
@@ -91,6 +93,13 @@ impl ClockCircuit {
         };
 
         self.program_counter += 1;
+    }
+
+    fn crt_position(&self) -> (usize, usize) {
+        let row = (self.cycle_counter - 1) / W;
+        let col = (self.cycle_counter - 1) % W;
+
+        (row, col)
     }
 
     /// The start of a cycle tick.
@@ -111,6 +120,20 @@ impl ClockCircuit {
         }
 
         Ok(())
+    }
+
+    /// The middle of the cycle tick.
+    ///
+    /// Draws a pixel on the CRT and returns the value of x.
+    fn tick_middle(&mut self) -> Result<i64, ExecutionError> {
+        let (row, col) = self.crt_position();
+
+        // Only draw if the pixel is within the sprite
+        if self.x - 1 <= col as i64 && self.x + 1 >= col as i64 {
+            self.crt[row][col] = true;
+        }
+
+        Ok(self.x)
     }
 
     /// The end of a cycle tick.
@@ -134,10 +157,27 @@ impl ClockCircuit {
     /// Executes a single tick and returns the value of x.
     fn tick(&mut self) -> Result<i64, ExecutionError> {
         self.tick_start()?;
-        let x = self.x;
+        let x = self.tick_middle()?;
         self.tick_end()?;
 
         Ok(x)
+    }
+}
+
+impl<const W: usize, const H: usize> Display for ClockCircuit<W, H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let display: String = self
+            .crt
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|&pixel| if pixel { "#" } else { "." })
+                    .collect::<String>()
+            })
+            .intersperse("\n".to_string())
+            .collect();
+
+        write!(f, "{display}")
     }
 }
 
@@ -152,7 +192,7 @@ impl Day for Day10 {
         let input = self.get_input();
 
         println!("Part 1: {}", part_1(&input));
-        println!("Part 2: {}", part_2(&input));
+        println!("Part 2:\n{}", part_2(&input));
     }
 }
 
@@ -160,7 +200,7 @@ fn part_1(input: &str) -> i64 {
     let mut signal_strength: i64 = 0;
 
     let program: Program = input.parse().unwrap();
-    let mut clock_circuit = ClockCircuit::new(program);
+    let mut clock_circuit = ClockCircuit::<40, 6>::new(program);
 
     let mut x = 1;
 
@@ -189,8 +229,17 @@ fn part_1(input: &str) -> i64 {
     signal_strength
 }
 
-fn part_2(_input: &str) -> usize {
-    0
+fn part_2(input: &str) -> String {
+    let program: Program = input.parse().unwrap();
+    let mut clock_circuit = ClockCircuit::<40, 6>::new(program);
+
+    loop {
+        if clock_circuit.tick().is_err() {
+            break;
+        }
+    }
+
+    format!("{clock_circuit}")
 }
 
 #[cfg(test)]
@@ -359,8 +408,15 @@ noop
 
     #[test]
     fn should_calculate_part_2_solution() {
-        let actual = part_2(EXAMPLE_INPUT_1);
+        let actual = part_2(EXAMPLE_INPUT_2);
 
-        assert_eq!(actual, 0);
+        let expected = "##..##..##..##..##..##..##..##..##..##..
+###...###...###...###...###...###...###.
+####....####....####....####....####....
+#####.....#####.....#####.....#####.....
+######......######......######......####
+#######.......#######.......#######.....";
+
+        assert_eq!(actual, expected.to_string());
     }
 }
