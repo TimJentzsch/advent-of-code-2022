@@ -1,4 +1,11 @@
-use std::collections::HashMap;
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take_while1},
+    combinator::{map, map_res},
+    multi::separated_list0,
+    sequence::{delimited, preceded, separated_pair, tuple},
+    IResult,
+};
 
 use crate::utils::Day;
 
@@ -12,7 +19,7 @@ trait SliceExt<T> {
 impl<T> SliceExt<T> for [T] {
     fn split_3_at_mut(&mut self, mid: usize) -> (&mut [T], &mut T, &mut [T]) {
         assert!(
-            self.is_empty(),
+            !self.is_empty(),
             "The slice must contain at least one element"
         );
         assert!(
@@ -26,6 +33,7 @@ impl<T> SliceExt<T> for [T] {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum Val {
     Old,
     Num(WorryLevel),
@@ -40,6 +48,7 @@ impl Val {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum Operation {
     Add(Val, Val),
     Mul(Val, Val),
@@ -54,6 +63,7 @@ impl Operation {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 struct Test {
     divisible_by: WorryLevel,
     if_true: MonkeyIndex,
@@ -70,18 +80,30 @@ impl Test {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 struct Monkey {
     items: Vec<WorryLevel>,
     operation: Operation,
     test: Test,
 }
 
-struct MonkeyInTheMiddle<const M: usize> {
-    monkeys: [Monkey; M],
-    inspect_count: [u64; M],
+struct MonkeyInTheMiddle {
+    monkeys: Vec<Monkey>,
+    inspect_count: Vec<u64>,
 }
 
-impl<const M: usize> MonkeyInTheMiddle<M> {
+impl MonkeyInTheMiddle {
+    fn new(monkeys: Vec<Monkey>) -> Self {
+        let count = monkeys.len();
+
+        Self {
+            monkeys,
+            inspect_count: (0..count).map(|_| 0).collect(),
+        }
+    }
+}
+
+impl MonkeyInTheMiddle {
     fn round(&mut self) {
         for monkey_idx in 0..self.monkeys.len() {
             let (before, monkey, after) = self.monkeys.split_3_at_mut(monkey_idx);
@@ -99,8 +121,10 @@ impl<const M: usize> MonkeyInTheMiddle<M> {
 
                 let next_monkey = match next_idx.cmp(&monkey_idx) {
                     std::cmp::Ordering::Less => before.get_mut(next_idx).unwrap(),
-                    std::cmp::Ordering::Equal => after.get_mut(next_idx - monkey_idx - 1).unwrap(),
-                    std::cmp::Ordering::Greater => panic!("Next monkey is same as current monkey"),
+                    std::cmp::Ordering::Equal => panic!("Next monkey is same as current monkey"),
+                    std::cmp::Ordering::Greater => {
+                        after.get_mut(next_idx - monkey_idx - 1).unwrap()
+                    }
                 };
 
                 next_monkey.items.push(item);
@@ -109,10 +133,105 @@ impl<const M: usize> MonkeyInTheMiddle<M> {
     }
 
     fn monkey_business_level(&self) -> u64 {
-        let mut counts: Vec<u64> = self.inspect_count.iter().copied().collect();
+        let mut counts: Vec<u64> = self.inspect_count.clone();
         counts.sort_unstable();
-        counts.iter().rev().take(2).sum()
+        counts.iter().rev().take(2).product()
     }
+}
+
+fn parse_ws(input: &str) -> IResult<&str, ()> {
+    map(take_while1(|c: char| c.is_ascii_whitespace()), |_| ())(input)
+}
+
+fn parse_worry_level(input: &str) -> IResult<&str, WorryLevel> {
+    map_res(take_while1(|c: char| c.is_ascii_digit()), |num: &str| {
+        num.parse::<WorryLevel>()
+    })(input)
+}
+
+fn parse_starting_items(input: &str) -> IResult<&str, Vec<WorryLevel>> {
+    preceded(
+        tag("Starting items: "),
+        separated_list0(tag(", "), parse_worry_level),
+    )(input)
+}
+
+fn parse_val(input: &str) -> IResult<&str, Val> {
+    let parse_old = map(tag("old"), |_| Val::Old);
+    let parse_num = map(parse_worry_level, Val::Num);
+
+    alt((parse_old, parse_num))(input)
+}
+
+fn parse_operation(input: &str) -> IResult<&str, Operation> {
+    let parse_add = map(
+        separated_pair(parse_val, tag(" + "), parse_val),
+        |(lhs, rhs)| Operation::Add(lhs, rhs),
+    );
+    let parse_mul = map(
+        separated_pair(parse_val, tag(" * "), parse_val),
+        |(lhs, rhs)| Operation::Mul(lhs, rhs),
+    );
+
+    preceded(tag("Operation: new = "), alt((parse_add, parse_mul)))(input)
+}
+
+fn parse_monkey_index(input: &str) -> IResult<&str, MonkeyIndex> {
+    map_res(take_while1(|c: char| c.is_ascii_digit()), |num: &str| {
+        num.parse::<MonkeyIndex>()
+    })(input)
+}
+
+fn parse_throw_to(input: &str) -> IResult<&str, MonkeyIndex> {
+    preceded(tag("throw to monkey "), parse_monkey_index)(input)
+}
+
+fn parse_test(input: &str) -> IResult<&str, Test> {
+    let parse_divisible_by = preceded(tag("Test: divisible by "), parse_worry_level);
+    let parse_true = preceded(tag("If true: "), parse_throw_to);
+    let parse_false = preceded(tag("If false: "), parse_throw_to);
+
+    map(
+        tuple((
+            parse_divisible_by,
+            parse_ws,
+            parse_true,
+            parse_ws,
+            parse_false,
+        )),
+        |(divisible_by, _, if_true, _, if_false)| Test {
+            divisible_by,
+            if_true,
+            if_false,
+        },
+    )(input)
+}
+
+fn parse_monkey(input: &str) -> IResult<&str, Monkey> {
+    let parse_monkey_idx = delimited(tag("Monkey "), parse_monkey_index, tag(":"));
+
+    map(
+        tuple((
+            parse_monkey_idx,
+            parse_ws,
+            parse_starting_items,
+            parse_ws,
+            parse_operation,
+            parse_ws,
+            parse_test,
+        )),
+        |(_, _, items, _, operation, _, test)| Monkey {
+            items,
+            operation,
+            test,
+        },
+    )(input)
+}
+
+fn parse_monkey_in_the_middle(input: &str) -> IResult<&str, MonkeyInTheMiddle> {
+    map(separated_list0(parse_ws, parse_monkey), |monkeys| {
+        MonkeyInTheMiddle::new(monkeys)
+    })(input.trim())
 }
 
 pub struct Day11;
@@ -130,8 +249,14 @@ impl Day for Day11 {
     }
 }
 
-fn part_1(_input: &str) -> usize {
-    0
+fn part_1(input: &str) -> WorryLevel {
+    let (_, mut monkey_in_the_middle) = parse_monkey_in_the_middle(input).unwrap();
+
+    for _ in 0..20 {
+        monkey_in_the_middle.round();
+    }
+
+    monkey_in_the_middle.monkey_business_level()
 }
 
 fn part_2(_input: &str) -> usize {
@@ -142,7 +267,34 @@ fn part_2(_input: &str) -> usize {
 mod tests {
     use super::*;
 
-    const EXAMPLE_INPUT: &'static str = "";
+    const EXAMPLE_INPUT: &'static str = "Monkey 0:
+    Starting items: 79, 98
+    Operation: new = old * 19
+    Test: divisible by 23
+      If true: throw to monkey 2
+      If false: throw to monkey 3
+  
+  Monkey 1:
+    Starting items: 54, 65, 75, 74
+    Operation: new = old + 6
+    Test: divisible by 19
+      If true: throw to monkey 2
+      If false: throw to monkey 0
+  
+  Monkey 2:
+    Starting items: 79, 60, 97
+    Operation: new = old * old
+    Test: divisible by 13
+      If true: throw to monkey 1
+      If false: throw to monkey 3
+  
+  Monkey 3:
+    Starting items: 74
+    Operation: new = old + 3
+    Test: divisible by 17
+      If true: throw to monkey 0
+      If false: throw to monkey 1
+";
 
     #[test]
     fn should_split_3_at_mut_middle() {
@@ -181,10 +333,34 @@ mod tests {
     }
 
     #[test]
+    fn should_parse_monkey() {
+        let monkey_str = "Monkey 0:
+        Starting items: 79, 98
+        Operation: new = old * 19
+        Test: divisible by 23
+          If true: throw to monkey 2
+          If false: throw to monkey 3";
+
+        let expected = Monkey {
+            items: vec![79, 98],
+            operation: Operation::Mul(Val::Old, Val::Num(19)),
+            test: Test {
+                divisible_by: 23,
+                if_true: 2,
+                if_false: 3,
+            },
+        };
+
+        let actual = parse_monkey(monkey_str);
+
+        assert_eq!(actual, Ok(("", expected)));
+    }
+
+    #[test]
     fn should_calculate_part_1_solution() {
         let actual = part_1(EXAMPLE_INPUT);
 
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 10605);
     }
 
     #[test]
