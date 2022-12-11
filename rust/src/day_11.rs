@@ -12,6 +12,34 @@ use crate::utils::Day;
 type MonkeyIndex = usize;
 type WorryLevel = u64;
 
+fn gcd(a: WorryLevel, b: WorryLevel) -> WorryLevel {
+    if a == 0 {
+        return b;
+    }
+    if b == 0 {
+        return a;
+    }
+
+    let (mut a, mut b) = (a, b);
+
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+
+    a
+}
+
+fn lcd(a: WorryLevel, b: WorryLevel) -> WorryLevel {
+    (a / gcd(a, b)) * b
+}
+
+fn lcd_many<I>(levels: I) -> WorryLevel
+where
+    I: IntoIterator<Item = WorryLevel>,
+{
+    levels.into_iter().fold(1, lcd)
+}
+
 trait SliceExt<T> {
     fn split_3_at_mut(&mut self, mid: usize) -> (&mut [T], &mut T, &mut [T]);
 }
@@ -104,20 +132,33 @@ impl MonkeyInTheMiddle {
 }
 
 impl MonkeyInTheMiddle {
-    fn round(&mut self) {
+    fn round(&mut self, enable_worry_reduction: bool) {
+        // Get the least common divisor of the divisor tests and 3 (for the worry decrease)
+        let worry_lcd = lcd_many(
+            self.monkeys
+                .iter()
+                .map(|monkey| monkey.test.divisible_by)
+                .chain([3u64].into_iter()),
+        );
+
         for monkey_idx in 0..self.monkeys.len() {
             let (before, monkey, after) = self.monkeys.split_3_at_mut(monkey_idx);
 
             for item in monkey.items.drain(..) {
                 // Monkey inspects item
-                let mut item = monkey.operation.evaluate(item);
+                let mut worry = monkey.operation.evaluate(item);
                 self.inspect_count[monkey_idx] += 1;
 
                 // Worry level decreases
-                item /= 3;
+                if enable_worry_reduction {
+                    worry /= 3;
+                }
+
+                // Make sure value doesn't grow too much
+                worry %= worry_lcd;
 
                 // Monkey throws item
-                let next_idx = monkey.test.get_next_monkey(item);
+                let next_idx = monkey.test.get_next_monkey(worry);
 
                 let next_monkey = match next_idx.cmp(&monkey_idx) {
                     std::cmp::Ordering::Less => before.get_mut(next_idx).unwrap(),
@@ -127,7 +168,7 @@ impl MonkeyInTheMiddle {
                     }
                 };
 
-                next_monkey.items.push(item);
+                next_monkey.items.push(worry);
             }
         }
     }
@@ -253,14 +294,20 @@ fn part_1(input: &str) -> WorryLevel {
     let (_, mut monkey_in_the_middle) = parse_monkey_in_the_middle(input).unwrap();
 
     for _ in 0..20 {
-        monkey_in_the_middle.round();
+        monkey_in_the_middle.round(true);
     }
 
     monkey_in_the_middle.monkey_business_level()
 }
 
-fn part_2(_input: &str) -> usize {
-    0
+fn part_2(input: &str) -> WorryLevel {
+    let (_, mut monkey_in_the_middle) = parse_monkey_in_the_middle(input).unwrap();
+
+    for _ in 0..10000 {
+        monkey_in_the_middle.round(false);
+    }
+
+    monkey_in_the_middle.monkey_business_level()
 }
 
 #[cfg(test)]
@@ -295,6 +342,16 @@ mod tests {
       If true: throw to monkey 0
       If false: throw to monkey 1
 ";
+
+    #[test]
+    fn should_calculate_gcd() {
+        assert_eq!(gcd(143, 65), 13);
+    }
+
+    #[test]
+    fn should_calculate_lcd() {
+        assert_eq!(lcd(12, 18), 36);
+    }
 
     #[test]
     fn should_split_3_at_mut_middle() {
@@ -367,6 +424,6 @@ mod tests {
     fn should_calculate_part_2_solution() {
         let actual = part_2(EXAMPLE_INPUT);
 
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 2713310158);
     }
 }
