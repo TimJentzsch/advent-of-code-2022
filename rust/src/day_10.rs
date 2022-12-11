@@ -246,12 +246,7 @@ fn part_2(input: &str) -> String {
 mod tests {
     use super::*;
 
-    const EXAMPLE_INPUT_1: &'static str = "noop
-addx 3
-addx -5
-";
-
-    const EXAMPLE_INPUT_2: &'static str = "addx 15
+    const EXAMPLE_INPUT: &'static str = "addx 15
 addx -11
 addx 6
 addx -3
@@ -401,14 +396,14 @@ noop
 
     #[test]
     fn should_calculate_part_1_solution() {
-        let actual = part_1(EXAMPLE_INPUT_2);
+        let actual = part_1(EXAMPLE_INPUT);
 
         assert_eq!(actual, 13140);
     }
 
     #[test]
     fn should_calculate_part_2_solution() {
-        let actual = part_2(EXAMPLE_INPUT_2);
+        let actual = part_2(EXAMPLE_INPUT);
 
         let expected = "##..##..##..##..##..##..##..##..##..##..
 ###...###...###...###...###...###...###.

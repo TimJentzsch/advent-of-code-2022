@@ -137,17 +137,6 @@ struct Rope<const L: usize> {
 
 impl<const L: usize> Rope<L> {
     #[cfg(test)]
-    fn new(knots: [Position; L]) -> Self {
-        let mut visited_by_tail = HashSet::new();
-        visited_by_tail.insert(knots[L - 1]);
-
-        Self {
-            knots,
-            visited_by_tail,
-        }
-    }
-
-    #[cfg(test)]
     fn head(&self) -> Position {
         self.knots[0]
     }
