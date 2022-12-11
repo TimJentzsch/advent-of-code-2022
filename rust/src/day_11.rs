@@ -12,6 +12,7 @@ use crate::utils::Day;
 type MonkeyIndex = usize;
 type WorryLevel = u64;
 
+/// Compute the greatest common divisor of `a` and `b`.
 fn gcd(a: WorryLevel, b: WorryLevel) -> WorryLevel {
     if a == 0 {
         return b;
@@ -29,10 +30,12 @@ fn gcd(a: WorryLevel, b: WorryLevel) -> WorryLevel {
     a
 }
 
+/// Compute the least common denominator of `a` and `b`.
 fn lcd(a: WorryLevel, b: WorryLevel) -> WorryLevel {
     (a / gcd(a, b)) * b
 }
 
+/// Compute the least common denominator of all provided numbers.
 fn lcd_many<I>(levels: I) -> WorryLevel
 where
     I: IntoIterator<Item = WorryLevel>,
@@ -133,12 +136,11 @@ impl MonkeyInTheMiddle {
 
 impl MonkeyInTheMiddle {
     fn round(&mut self, enable_worry_reduction: bool) {
-        // Get the least common divisor of the divisor tests and 3 (for the worry decrease)
-        let worry_lcd = lcd_many(
-            self.monkeys
-                .iter()
-                .map(|monkey| monkey.test.divisible_by)
-                .chain([3u64].into_iter()),
+        // Get the least common denominator of the divisor tests and 3 (for the worry decrease)
+        // This allows us to safely cap by this value without changing the tests
+        let worry_lcd = lcd(
+            lcd_many(self.monkeys.iter().map(|monkey| monkey.test.divisible_by)),
+            3,
         );
 
         for monkey_idx in 0..self.monkeys.len() {
