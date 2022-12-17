@@ -13,7 +13,7 @@ struct ParseError;
 
 type Pressure = u16;
 
-type Minute = u8;
+type Time = u8;
 
 type ValveIndex = usize;
 
@@ -132,10 +132,10 @@ impl OpenValves {
 
 /// A list of valves that are still reachable, and the time it takes to reach them.
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct ReachableValves(Vec<(ValveIndex, Minute)>);
+struct ReachableValves(Vec<(ValveIndex, Time)>);
 
 impl ReachableValves {
-    fn iter(&self) -> Iter<'_, (ValveIndex, Minute)> {
+    fn iter(&self) -> Iter<'_, (ValveIndex, Time)> {
         self.0.iter()
     }
 
@@ -144,29 +144,29 @@ impl ReachableValves {
     }
 }
 
-impl FromIterator<(ValveIndex, Minute)> for ReachableValves {
-    fn from_iter<T: IntoIterator<Item = (ValveIndex, Minute)>>(iter: T) -> Self {
+impl FromIterator<(ValveIndex, Time)> for ReachableValves {
+    fn from_iter<T: IntoIterator<Item = (ValveIndex, Time)>>(iter: T) -> Self {
         Self(Vec::from_iter(iter))
     }
 }
 
-type MoveMap = HashMap<(ValveIndex, ValveIndex), Minute>;
+type MoveMap = HashMap<(ValveIndex, ValveIndex), Time>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct GameInfo<const N: usize> {
     flow_rates: FlowRates<N>,
     adjacent_valves: AdjacentValves<N>,
-    total_minutes: Minute,
+    total_time: Time,
 }
 
 impl<const N: usize> GameInfo<N> {
-    fn move_time(&self, from: ValveIndex, to: ValveIndex) -> Minute {
+    fn move_time(&self, from: ValveIndex, to: ValveIndex) -> Time {
         // TODO: Make this more efficient
         let mut reachable = vec![from];
 
         for move_time in 0..N {
             if reachable.contains(&to) {
-                return move_time as Minute;
+                return move_time as Time;
             }
 
             reachable = reachable
@@ -197,17 +197,13 @@ impl<const N: usize> GameInfo<N> {
             })
             .collect()
     }
-}
 
-impl<const N: usize> FromStr for GameInfo<N> {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str, total_time: Time) -> Result<Self, ParseError> {
         let mut parsed_valves = s
             .trim()
             .lines()
             .map(|line| line.parse())
-            .collect::<Result<Vec<ParsedValve>, Self::Err>>()?;
+            .collect::<Result<Vec<ParsedValve>, ParseError>>()?;
 
         parsed_valves.sort();
 
@@ -242,7 +238,7 @@ impl<const N: usize> FromStr for GameInfo<N> {
         Ok(Self {
             adjacent_valves,
             flow_rates,
-            total_minutes: 30,
+            total_time,
         })
     }
 }
@@ -250,7 +246,7 @@ impl<const N: usize> FromStr for GameInfo<N> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PlayerState<const N: usize> {
     next_valve: ValveIndex,
-    time_to_reach: Minute,
+    time_to_reach: Time,
 
     /// The valves that are still reachable within the remaining time and the time it takes to reach them.
     reachable_valves: ReachableValves,
@@ -259,14 +255,8 @@ struct PlayerState<const N: usize> {
 impl<const N: usize> PlayerState<N> {
     fn start(info: &GameInfo<N>, move_map: &MoveMap) -> Self {
         let open_valves = OpenValves::new();
-        let reachable_valves = Self::calculate_reachable_valves(
-            info.total_minutes,
-            0,
-            0,
-            &open_valves,
-            info,
-            move_map,
-        );
+        let reachable_valves =
+            Self::calculate_reachable_valves(info.total_time, 0, 0, &open_valves, info, move_map);
 
         Self {
             next_valve: 0,
@@ -276,7 +266,7 @@ impl<const N: usize> PlayerState<N> {
         }
     }
 
-    fn tick(&mut self, time: Minute) {
+    fn tick(&mut self, time: Time) {
         self.time_to_reach = self.time_to_reach.saturating_sub(time);
     }
 
@@ -289,7 +279,7 @@ impl<const N: usize> PlayerState<N> {
     }
 
     fn calculate_reachable_valves(
-        remaining_time: Minute,
+        remaining_time: Time,
         cur_valve: ValveIndex,
         prev_valve: ValveIndex,
         open_valves: &OpenValves,
@@ -321,7 +311,7 @@ impl<const N: usize> PlayerState<N> {
 
     fn expand(
         &self,
-        remaining_time: Minute,
+        remaining_time: Time,
         open_valves: &OpenValves,
         info: &GameInfo<N>,
         move_map: &MoveMap,
@@ -356,7 +346,7 @@ impl<const N: usize> PlayerState<N> {
 struct GameState<const N: usize, const P: usize> {
     open_valves: OpenValves,
     cur_pressure_release: Pressure,
-    cur_minute: Minute,
+    cur_minute: Time,
 
     player_states: [PlayerState<N>; P],
 
@@ -365,7 +355,7 @@ struct GameState<const N: usize, const P: usize> {
 }
 
 impl<const N: usize, const P: usize> GameState<N, P> {
-    fn start(info: &GameInfo<N>, move_map: &MoveMap, total_time: Minute) -> Self {
+    fn start(info: &GameInfo<N>, move_map: &MoveMap, total_time: Time) -> Self {
         let open_valves = OpenValves::new();
         let player_states = (0..P)
             .map(|_| PlayerState::<N>::start(info, move_map))
@@ -398,7 +388,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         let cur_pressure_release =
             self.cur_pressure_release + self.released_pressure(tick_time, info);
 
-        let remaining_time = info.total_minutes - cur_minute;
+        let remaining_time = info.total_time - cur_minute;
 
         let mut open_valves = self.open_valves.clone();
 
@@ -445,7 +435,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
     }
 
     fn calculate_heuristic(
-        remaining_time: Minute,
+        remaining_time: Time,
         player_states: &[PlayerState<N>; P],
         open_valves: &OpenValves,
         info: &GameInfo<N>,
@@ -469,7 +459,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
                         if player_state.next_valve == valve {
                             player_state.time_to_reach
                         } else {
-                            let mut player_time = Minute::MAX;
+                            let mut player_time = Time::MAX;
 
                             for (v, time) in player_state.reachable_valves.iter() {
                                 if *v == valve {
@@ -481,7 +471,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
                         }
                     })
                     .min()
-                    .unwrap_or(Minute::MAX);
+                    .unwrap_or(Time::MAX);
 
                 let max_open_time = remaining_time.saturating_sub(time_to_reach);
                 max_open_time as Pressure * info.flow_rate(valve)
@@ -491,7 +481,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         open_valve_value + closed_valve_value
     }
 
-    fn released_pressure(&self, time: Minute, info: &GameInfo<N>) -> Pressure {
+    fn released_pressure(&self, time: Time, info: &GameInfo<N>) -> Pressure {
         self.open_valves
             .iter()
             .map(|&valve| info.flow_rates.0[valve] * time as Pressure)
@@ -500,7 +490,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
 
     fn expand(&mut self, info: &GameInfo<N>, move_map: &MoveMap) -> Vec<GameState<N, P>> {
         let next_state = self.next_state(info);
-        let remaining_time = info.total_minutes - next_state.cur_minute;
+        let remaining_time = info.total_time - next_state.cur_minute;
 
         let next_player_states: [Vec<PlayerState<N>>; P] = next_state
             .player_states
@@ -573,13 +563,13 @@ impl<const N: usize> PressureReleaseSearch<N> {
         Self { info, move_map }
     }
 
-    fn search<const P: usize>(&self, total_time: Minute) -> GameState<N, P> {
+    fn search<const P: usize>(&self) -> GameState<N, P> {
         // Do a modified A* search
         let mut open_set: BinaryHeap<GameState<N, P>> = BinaryHeap::new();
         open_set.push(GameState::<N, P>::start(
             &self.info,
             &self.move_map,
-            total_time,
+            self.info.total_time,
         ));
 
         while let Some(mut current) = open_set.pop() {
@@ -610,20 +600,21 @@ impl Day for Day16 {
 }
 
 fn part_1<const N: usize>(input: &str) -> Pressure {
-    let info: GameInfo<N> = input.parse().unwrap();
+    let info = GameInfo::<N>::from_str(input, 30).unwrap();
     let move_map = info.compute_move_map();
 
     let pressure_search = PressureReleaseSearch::new(info, move_map);
-    let result = pressure_search.search::<1>(30);
+    let result = pressure_search.search::<1>();
     result.score()
 }
 
 fn part_2<const N: usize>(input: &str) -> Pressure {
-    let info: GameInfo<N> = input.parse().unwrap();
+    let info: GameInfo<N> = GameInfo::<N>::from_str(input, 26).unwrap();
     let move_map = info.compute_move_map();
 
     let pressure_search = PressureReleaseSearch::new(info, move_map);
-    let result = pressure_search.search::<2>(26);
+    let result = pressure_search.search::<2>();
+    println!("Result {result:?}");
     result.score()
 }
 
@@ -646,7 +637,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II
 
     #[test]
     fn should_parse_game_info() {
-        let actual: GameInfo<10> = EXAMPLE_INPUT.parse().unwrap();
+        let actual = GameInfo::<10>::from_str(EXAMPLE_INPUT, 30).unwrap();
         let expected = GameInfo::<10> {
             adjacent_valves: AdjacentValves([
                 vec![3, 8, 1],
@@ -661,7 +652,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II
                 vec![8],
             ]),
             flow_rates: FlowRates([0, 13, 2, 20, 3, 0, 0, 22, 0, 21]),
-            total_minutes: 30,
+            total_time: 30,
         };
 
         assert_eq!(actual, expected);
@@ -681,7 +672,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II
             &GameInfo {
                 flow_rates: FlowRates([2; 3]),
                 adjacent_valves: AdjacentValves([vec![2], vec![0], vec![1]]),
-                total_minutes: 10,
+                total_time: 10,
             },
             &HashMap::new(),
         );
@@ -709,7 +700,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II
         let info = GameInfo {
             flow_rates: FlowRates([2; 3]),
             adjacent_valves: AdjacentValves([vec![2], vec![0], vec![0, 1]]),
-            total_minutes: 10,
+            total_time: 10,
         };
 
         let actual = state.expand(10, &OpenValves(vec![]), &info, &move_map);
