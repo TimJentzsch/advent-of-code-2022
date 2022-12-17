@@ -217,7 +217,7 @@ impl<const N: usize> FromStr for GameInfo<N> {
             .map(|(index, parsed_valve)| (parsed_valve.name.as_str(), index))
             .collect();
 
-        let adjacent_valves: Vec<_> = parsed_valves
+        let adjacent_valves = parsed_valves
             .iter()
             .map(|valve| {
                 valve
@@ -228,12 +228,15 @@ impl<const N: usize> FromStr for GameInfo<N> {
                             .get(name.as_str())
                             .unwrap_or_else(|| panic!("Can't map {name} to a valve index"))
                     })
-                    .collect::<Vec<ValveIndex>>()
+                    .collect_vec()
             })
-            .collect();
+            .collect_vec();
         let adjacent_valves = adjacent_valves.try_into().map_err(|_| ParseError)?;
 
-        let flow_rates: Vec<_> = parsed_valves.iter().map(|valve| valve.flow_rate).collect();
+        let flow_rates = parsed_valves
+            .iter()
+            .map(|valve| valve.flow_rate)
+            .collect_vec();
         let flow_rates = flow_rates.try_into().map_err(|_| ParseError)?;
 
         Ok(Self {
@@ -244,7 +247,7 @@ impl<const N: usize> FromStr for GameInfo<N> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PlayerState<const N: usize> {
     next_valve: ValveIndex,
     time_to_reach: Minute,
@@ -256,8 +259,14 @@ struct PlayerState<const N: usize> {
 impl<const N: usize> PlayerState<N> {
     fn start(info: &GameInfo<N>, move_map: &MoveMap) -> Self {
         let open_valves = OpenValves::new();
-        let reachable_valves =
-            Self::calculate_reachable_valves(info.total_minutes, 0, &open_valves, info, move_map);
+        let reachable_valves = Self::calculate_reachable_valves(
+            info.total_minutes,
+            0,
+            0,
+            &open_valves,
+            info,
+            move_map,
+        );
 
         Self {
             next_valve: 0,
@@ -282,16 +291,24 @@ impl<const N: usize> PlayerState<N> {
     fn calculate_reachable_valves(
         remaining_time: Minute,
         cur_valve: ValveIndex,
+        prev_valve: ValveIndex,
         open_valves: &OpenValves,
         info: &GameInfo<N>,
         move_map: &MoveMap,
     ) -> ReachableValves {
         (0..N)
             // Only consider valves that are not opened yet and that have any flow
-            .filter(|valve| !open_valves.contains(valve) && info.flow_rate(*valve) != 0)
+            .filter(|valve| {
+                !open_valves.contains(valve)
+                    && info.flow_rate(*valve) != 0
+                    && *valve != prev_valve
+                    && *valve != cur_valve
+            })
             // Only consider valves that can still be reached and opened in the remaining time
             .filter_map(|valve| {
-                let time = move_map.get(&(cur_valve, valve)).unwrap() + 1;
+                let time = move_map.get(&(cur_valve, valve)).unwrap_or_else(|| {
+                    panic!("Failed to get move time from {cur_valve} to {valve}")
+                }) + 1;
 
                 if time <= remaining_time {
                     Some((valve, time))
@@ -320,6 +337,7 @@ impl<const N: usize> PlayerState<N> {
                     time_to_reach,
                     reachable_valves: Self::calculate_reachable_valves(
                         remaining_time,
+                        next_valve,
                         cur_valve,
                         open_valves,
                         info,
@@ -328,7 +346,8 @@ impl<const N: usize> PlayerState<N> {
                 })
                 .collect()
         } else {
-            vec![self.clone()]
+            let state = self.clone();
+            vec![state]
         }
     }
 }
@@ -393,6 +412,25 @@ impl<const N: usize, const P: usize> GameState<N, P> {
             }
         });
 
+        // Update reachable valves
+        player_states.iter_mut().for_each(|player_state| {
+            // If the reachable valves contained a valve that was just opened, remove it
+            if player_state
+                .reachable_valves
+                .iter()
+                .any(|(valve, _)| open_valves.contains(valve))
+            {
+                player_state.reachable_valves = ReachableValves(
+                    player_state
+                        .reachable_valves
+                        .iter()
+                        .filter(|(valve, _)| open_valves.contains(valve))
+                        .copied()
+                        .collect(),
+                );
+            }
+        });
+
         // Pre-compute heuristic
         let heuristic =
             Self::calculate_heuristic(remaining_time, &player_states, &open_valves, info);
@@ -421,22 +459,29 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         // We can go to the closed valves and open them to release more pressure
         // This is an upper bound, as we cannot go to multiple valves "at the same time"
         let closed_valve_value = (0..N)
+            // Only consider closed valves with flow
+            .filter(|valve| !open_valves.contains(valve) && info.flow_rate(*valve) > 0)
+            // Determine how quickly they can be reached
             .map(|valve| {
-                let time_to_reach = player_states.iter().fold(Minute::MAX, |acc, player_state| {
-                    if player_state.next_valve == valve {
-                        acc.min(player_state.time_to_reach)
-                    } else {
-                        let mut player_time = Minute::MAX;
+                let time_to_reach = player_states
+                    .iter()
+                    .map(|player_state| {
+                        if player_state.next_valve == valve {
+                            player_state.time_to_reach
+                        } else {
+                            let mut player_time = Minute::MAX;
 
-                        for (v, time) in player_state.reachable_valves.iter() {
-                            if *v == valve {
-                                player_time = time + player_state.time_to_reach;
+                            for (v, time) in player_state.reachable_valves.iter() {
+                                if *v == valve {
+                                    player_time = time + player_state.time_to_reach;
+                                }
                             }
-                        }
 
-                        acc.min(player_time)
-                    }
-                });
+                            player_time
+                        }
+                    })
+                    .min()
+                    .unwrap_or(Minute::MAX);
 
                 let max_open_time = remaining_time.saturating_sub(time_to_reach);
                 max_open_time as Pressure * info.flow_rate(valve)
@@ -560,7 +605,7 @@ impl Day for Day16 {
         let input = self.get_input();
 
         println!("Part 1: {}", part_1::<59>(&input));
-        println!("Part 2: {}", part_2(&input));
+        println!("Part 2: {}", part_2::<59>(&input));
     }
 }
 
@@ -573,8 +618,13 @@ fn part_1<const N: usize>(input: &str) -> Pressure {
     result.score()
 }
 
-fn part_2(_input: &str) -> usize {
-    0
+fn part_2<const N: usize>(input: &str) -> Pressure {
+    let info: GameInfo<N> = input.parse().unwrap();
+    let move_map = info.compute_move_map();
+
+    let pressure_search = PressureReleaseSearch::new(info, move_map);
+    let result = pressure_search.search::<2>(26);
+    result.score()
 }
 
 #[cfg(test)]
@@ -617,27 +667,67 @@ Valve JJ has flow rate=21; tunnel leads to valve II
         assert_eq!(actual, expected);
     }
 
-    // #[test]
-    // fn should_generate_starting_node() {
-    //     let info: GameInfo<10> = EXAMPLE_INPUT.parse().unwrap();
-    //     let actual = GameState::<10>::start(&info);
-    //     let expected = GameState::<10> {
-    //         cur_minute: 0,
-    //         cur_pressure_release: 0,
-    //         cur_valve: 0,
-    //         open_valves: OpenValves::new(),
-    //         reachable_valves: ReachableValves(vec![(1, 2), (2, 3), (3, 2), (4, 3), (7, 6), (9, 3)]),
-    //         heuristic: 2154,
-    //     };
+    #[test]
+    fn should_expand_player_state_moving() {
+        let state = PlayerState::<3> {
+            next_valve: 2,
+            time_to_reach: 1,
+            reachable_valves: ReachableValves(vec![]),
+        };
 
-    //     // We can't simply compare the state directly, as that only compares the score
-    //     assert_eq!(actual.cur_minute, expected.cur_minute);
-    //     assert_eq!(actual.cur_pressure_release, expected.cur_pressure_release);
-    //     assert_eq!(actual.cur_valve, expected.cur_valve);
-    //     assert_eq!(actual.open_valves, expected.open_valves);
-    //     assert_eq!(actual.reachable_valves, expected.reachable_valves);
-    //     assert_eq!(actual.heuristic, expected.heuristic);
-    // }
+        let actual = state.expand(
+            10,
+            &OpenValves(vec![0]),
+            &GameInfo {
+                flow_rates: FlowRates([2; 3]),
+                adjacent_valves: AdjacentValves([vec![2], vec![0], vec![1]]),
+                total_minutes: 10,
+            },
+            &HashMap::new(),
+        );
+        let expected = vec![state.clone()];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn should_expand_player_state_ready() {
+        let state = PlayerState::<3> {
+            next_valve: 2,
+            time_to_reach: 0,
+            reachable_valves: ReachableValves(vec![(0, 2), (1, 3)]),
+        };
+
+        let mut move_map = HashMap::new();
+        move_map.insert((0, 1), 2);
+        move_map.insert((0, 2), 1);
+        move_map.insert((1, 0), 1);
+        move_map.insert((1, 2), 2);
+        move_map.insert((2, 0), 1);
+        move_map.insert((2, 1), 1);
+
+        let info = GameInfo {
+            flow_rates: FlowRates([2; 3]),
+            adjacent_valves: AdjacentValves([vec![2], vec![0], vec![0, 1]]),
+            total_minutes: 10,
+        };
+
+        let actual = state.expand(10, &OpenValves(vec![]), &info, &move_map);
+        let expected = vec![
+            PlayerState::<3> {
+                next_valve: 0,
+                time_to_reach: 2,
+                reachable_valves: ReachableValves(vec![(1, 3)]),
+            },
+            PlayerState::<3> {
+                next_valve: 1,
+                time_to_reach: 3,
+                reachable_valves: ReachableValves(vec![(0, 2)]),
+            },
+        ];
+
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn should_calculate_part_1_solution() {
@@ -648,8 +738,8 @@ Valve JJ has flow rate=21; tunnel leads to valve II
 
     #[test]
     fn should_calculate_part_2_solution() {
-        let actual = part_2(EXAMPLE_INPUT);
+        let actual = part_2::<10>(EXAMPLE_INPUT);
 
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 1707);
     }
 }
