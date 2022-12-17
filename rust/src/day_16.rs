@@ -1,9 +1,13 @@
 use std::{
     collections::{BinaryHeap, HashMap},
     slice::Iter,
+    str::FromStr,
 };
 
 use crate::utils::Day;
+
+#[derive(Debug, PartialEq, Eq)]
+struct ParseError;
 
 type Pressure = u16;
 
@@ -11,20 +15,94 @@ type Minute = u8;
 
 type ValveIndex = usize;
 
-/// The two letter names for each valve.
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct ValveName(String);
+struct ParsedValve {
+    name: String,
+    flow_rate: Pressure,
+    adjacent_valves: Vec<String>,
+}
 
-/// A map from the valve names to their index.
-type ValveIndexMap = HashMap<ValveName, ValveIndex>;
+impl FromStr for ParsedValve {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let tokens = &mut s.split_ascii_whitespace();
+
+        let Some(name) = tokens.nth(1) else {
+            return Err(ParseError);
+        };
+
+        let Ok(flow_rate) = (if let Some(rate_str) = tokens.nth(2) {
+            let Some((_, end_str)) = rate_str.split_once('=') else {
+                return Err(ParseError);
+            };
+
+            end_str[..(end_str.len() - 1)].parse::<Pressure>()
+        } else {
+            return Err(ParseError);
+        }) else {
+            return Err(ParseError)
+        };
+
+        let adjacent_valves: Vec<String> = tokens
+            .skip(4)
+            .collect::<String>()
+            .split(',')
+            .map(|s| s.to_string())
+            .collect();
+
+        Ok(Self {
+            name: name.to_string(),
+            flow_rate,
+            adjacent_valves,
+        })
+    }
+}
+
+impl PartialEq for ParsedValve {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.eq(&other.name)
+    }
+}
+
+impl Eq for ParsedValve {}
+
+impl PartialOrd for ParsedValve {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ParsedValve {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
+}
 
 /// A map of the flow rate for each valve.
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct FlowRates<const N: usize>([Pressure; N]);
 
+impl<const N: usize> TryFrom<Vec<Pressure>> for FlowRates<N> {
+    type Error = Vec<Pressure>;
+
+    fn try_from(value: Vec<Pressure>) -> Result<Self, Self::Error> {
+        let flow_rates: [Pressure; N] = value.try_into()?;
+        Ok(Self(flow_rates))
+    }
+}
+
 /// A map of the adjacent valves for each valve.
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct AdjacentValves<const N: usize>([Vec<ValveIndex>; N]);
+
+impl<const N: usize> TryFrom<Vec<Vec<ValveIndex>>> for AdjacentValves<N> {
+    type Error = Vec<Vec<ValveIndex>>;
+
+    fn try_from(value: Vec<Vec<ValveIndex>>) -> Result<Self, Self::Error> {
+        let adjacent_valves: [Vec<ValveIndex>; N] = value.try_into()?;
+        Ok(Self(adjacent_valves))
+    }
+}
 
 /// A list of the currently open valves.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -57,16 +135,6 @@ impl ReachableValves {
         Self(Vec::new())
     }
 
-    fn contains(&self, valve: &ValveIndex) -> bool {
-        for (cur_valve, _) in &self.0 {
-            if valve == cur_valve {
-                return true;
-            }
-        }
-
-        false
-    }
-
     fn iter(&self) -> Iter<'_, (ValveIndex, Minute)> {
         self.0.iter()
     }
@@ -92,6 +160,51 @@ struct GameInfo<const N: usize> {
 impl<const N: usize> GameInfo<N> {
     fn move_time(&self, from: ValveIndex, to: ValveIndex) -> Minute {
         todo!("Implement move time algorithm")
+    }
+}
+
+impl<const N: usize> FromStr for GameInfo<N> {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parsed_valves = s
+            .trim()
+            .lines()
+            .map(|line| line.parse())
+            .collect::<Result<Vec<ParsedValve>, Self::Err>>()?;
+
+        parsed_valves.sort();
+
+        let index_map: HashMap<&str, ValveIndex> = parsed_valves
+            .iter()
+            .enumerate()
+            .map(|(index, parsed_valve)| (parsed_valve.name.as_str(), index))
+            .collect();
+
+        let adjacent_valves: Vec<_> = parsed_valves
+            .iter()
+            .map(|valve| {
+                valve
+                    .adjacent_valves
+                    .iter()
+                    .map(|name| {
+                        *index_map
+                            .get(name.as_str())
+                            .unwrap_or_else(|| panic!("Can't map {name} to a valve index"))
+                    })
+                    .collect::<Vec<ValveIndex>>()
+            })
+            .collect();
+        let adjacent_valves = adjacent_valves.try_into().map_err(|_| ParseError)?;
+
+        let flow_rates: Vec<_> = parsed_valves.iter().map(|valve| valve.flow_rate).collect();
+        let flow_rates = flow_rates.try_into().map_err(|_| ParseError)?;
+
+        Ok(Self {
+            adjacent_valves,
+            flow_rates,
+            total_minutes: 30,
+        })
     }
 }
 
@@ -296,10 +409,6 @@ impl<const N: usize> PressureReleaseSearch<N> {
 
         panic!("Unexpected end of search without result!");
     }
-
-    fn part_1(&self) -> Pressure {
-        self.search().score()
-    }
 }
 
 pub struct Day16;
@@ -312,13 +421,15 @@ impl Day for Day16 {
     fn run(&self) {
         let input = self.get_input();
 
-        println!("Part 1: {}", part_1(&input));
+        println!("Part 1: {}", part_1::<59>(&input));
         println!("Part 2: {}", part_2(&input));
     }
 }
 
-fn part_1(_input: &str) -> usize {
-    0
+fn part_1<const N: usize>(input: &str) -> Pressure {
+    let game_info: GameInfo<N> = input.parse().unwrap();
+    let pressure_search = PressureReleaseSearch::new(game_info);
+    pressure_search.search().score()
 }
 
 fn part_2(_input: &str) -> usize {
@@ -329,13 +440,24 @@ fn part_2(_input: &str) -> usize {
 mod tests {
     use super::*;
 
-    const EXAMPLE_INPUT: &'static str = "";
+    const EXAMPLE_INPUT: &'static str =
+        "Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
+Valve BB has flow rate=13; tunnels lead to valves CC, AA
+Valve CC has flow rate=2; tunnels lead to valves DD, BB
+Valve DD has flow rate=20; tunnels lead to valves CC, AA, EE
+Valve EE has flow rate=3; tunnels lead to valves FF, DD
+Valve FF has flow rate=0; tunnels lead to valves EE, GG
+Valve GG has flow rate=0; tunnels lead to valves FF, HH
+Valve HH has flow rate=22; tunnel leads to valve GG
+Valve II has flow rate=0; tunnels lead to valves AA, JJ
+Valve JJ has flow rate=21; tunnel leads to valve II
+";
 
     #[test]
     fn should_calculate_part_1_solution() {
-        let actual = part_1(EXAMPLE_INPUT);
+        let actual = part_1::<10>(EXAMPLE_INPUT);
 
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 1651);
     }
 
     #[test]
