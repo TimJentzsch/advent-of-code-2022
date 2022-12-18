@@ -325,18 +325,22 @@ impl<const N: usize> PlayerState<N> {
             // We can move to any closed valve and open it (if there is enough time)
             self.reachable_valves
                 .iter()
-                .map(|&(next_valve, time_to_reach)| Self {
-                    next_valve,
-                    time_to_reach,
-                    turned_on_valves: self.turned_on_valves.clone(),
-                    reachable_valves: Self::calculate_reachable_valves(
-                        remaining_time,
+                .map(|&(next_valve, time_to_reach)| {
+                    let next_reachable_valves = Self::calculate_reachable_valves(
+                        remaining_time.saturating_sub(time_to_reach),
                         next_valve,
                         cur_valve,
                         open_valves,
                         info,
                         move_map,
-                    ),
+                    );
+
+                    Self {
+                        next_valve,
+                        time_to_reach,
+                        turned_on_valves: self.turned_on_valves.clone(),
+                        reachable_valves: next_reachable_valves,
+                    }
                 })
                 .collect()
         } else {
@@ -376,8 +380,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         }
     }
 
-    fn next_state(&self, info: &GameInfo<N>) -> Self {
-        // Compute minimum time until something happens
+    fn tick_to_next_action(&mut self, info: &GameInfo<N>) {
         let tick_time = self
             .player_states
             .iter()
@@ -386,52 +389,91 @@ impl<const N: usize, const P: usize> GameState<N, P> {
             .unwrap();
 
         // The time passes while we move to the next valve and open it
-        let cur_minute = self.cur_minute + tick_time;
+        self.cur_minute += tick_time;
 
         // Release pressure from the open valves during the time
-        let cur_pressure_release =
-            self.cur_pressure_release + self.released_pressure(tick_time, info);
-
-        let remaining_time = info.total_time.saturating_sub(cur_minute);
-
-        let mut open_valves = self.open_valves.clone();
+        self.cur_pressure_release += self.released_pressure(tick_time, info);
 
         // Move every player forward
-        let mut player_states = self.player_states.clone();
-        player_states.iter_mut().for_each(|player_state| {
+        self.player_states.iter_mut().for_each(|player_state| {
             player_state.tick(tick_time);
 
             if player_state.is_ready() {
-                player_state.execute_action(&mut open_valves);
+                player_state.execute_action(&mut self.open_valves);
             }
         });
+    }
+
+    fn released_pressure(&self, time: Time, info: &GameInfo<N>) -> Pressure {
+        self.open_valves
+            .iter()
+            .map(|&valve| info.flow_rate(valve) * time as Pressure)
+            .sum()
+    }
+
+    fn expand(&mut self, info: &GameInfo<N>, move_map: &MoveMap) -> Vec<GameState<N, P>> {
+        // Pass time until the next action and release pressure from the open valves
+        self.tick_to_next_action(info);
+
+        let remaining_time = info.total_time.saturating_sub(self.cur_minute);
 
         // Update reachable valves
-        player_states.iter_mut().for_each(|player_state| {
+        self.player_states.iter_mut().for_each(|player_state| {
             // If the reachable valves contained a valve that was just opened, remove it
             if player_state
                 .reachable_valves
                 .iter()
-                .any(|(valve, _)| open_valves.contains(valve))
+                .any(|(valve, _)| self.open_valves.contains(valve))
             {
                 player_state.reachable_valves = ReachableValves(
                     player_state
                         .reachable_valves
                         .iter()
-                        .filter(|(valve, _)| open_valves.contains(valve))
+                        .filter(|(valve, _)| !self.open_valves.contains(valve))
                         .copied()
                         .collect(),
                 );
             }
         });
 
-        Self {
-            cur_minute,
-            cur_pressure_release,
-            open_valves,
-            heuristic: self.heuristic,
-            player_states,
-        }
+        let next_player_states: [Vec<PlayerState<N>>; P] = self
+            .player_states
+            .iter()
+            .map(|player_state| {
+                player_state.expand(remaining_time, &self.open_valves, info, move_map)
+            })
+            .collect_vec()
+            .try_into()
+            .unwrap();
+
+        let next_player_states: Vec<[PlayerState<N>; P]> = next_player_states
+            .into_iter()
+            .multi_cartesian_product()
+            .map(|states| states.try_into().unwrap())
+            .collect();
+
+        // println!("Next player states: {next_player_states:?}");
+
+        next_player_states
+            .into_iter()
+            .map(|player_states| {
+                let mut state = self.clone();
+                state.player_states = player_states;
+                state.heuristic = Self::calculate_heuristic(
+                    remaining_time,
+                    &state.player_states,
+                    &state.open_valves,
+                    info,
+                );
+                state
+            })
+            .collect()
+    }
+
+    fn is_leaf(&self) -> bool {
+        self.player_states
+            .iter()
+            .all(|p| p.reachable_valves.is_empty())
     }
 
     fn calculate_heuristic(
@@ -486,57 +528,6 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         // );
 
         open_valve_value + closed_valve_value
-    }
-
-    fn released_pressure(&self, time: Time, info: &GameInfo<N>) -> Pressure {
-        self.open_valves
-            .iter()
-            .map(|&valve| info.flow_rates.0[valve] * time as Pressure)
-            .sum()
-    }
-
-    fn expand(&mut self, info: &GameInfo<N>, move_map: &MoveMap) -> Vec<GameState<N, P>> {
-        let next_state = self.next_state(info);
-        let remaining_time = info.total_time.saturating_sub(next_state.cur_minute);
-
-        let next_player_states: [Vec<PlayerState<N>>; P] = next_state
-            .player_states
-            .iter()
-            .map(|player_state| {
-                player_state.expand(remaining_time, &self.open_valves, info, move_map)
-            })
-            .collect_vec()
-            .try_into()
-            .unwrap();
-
-        let next_player_states: Vec<[PlayerState<N>; P]> = next_player_states
-            .into_iter()
-            .multi_cartesian_product()
-            .map(|states| states.try_into().unwrap())
-            .collect();
-
-        // println!("Next player states: {next_player_states:?}");
-
-        next_player_states
-            .into_iter()
-            .map(|player_states| {
-                let mut state = next_state.clone();
-                state.player_states = player_states;
-                state.heuristic = Self::calculate_heuristic(
-                    remaining_time,
-                    &state.player_states,
-                    &state.open_valves,
-                    info,
-                );
-                state
-            })
-            .collect()
-    }
-
-    fn is_leaf(&self) -> bool {
-        self.player_states
-            .iter()
-            .all(|p| p.reachable_valves.is_empty())
     }
 
     /// An upper bound for the total pressure released of this state.
@@ -630,7 +621,6 @@ fn part_2<const N: usize>(input: &str) -> Pressure {
 
     let pressure_search = PressureReleaseSearch::new(info, move_map);
     let result = pressure_search.search::<2>();
-    println!("Result {result:?}");
     result.score()
 }
 
