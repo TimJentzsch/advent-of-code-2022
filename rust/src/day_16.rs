@@ -22,7 +22,7 @@ type Pressure = u16;
 
 type Time = u8;
 
-type ValveIndex = usize;
+type ValveIndex = u8;
 
 struct ParsedValve {
     name: String,
@@ -105,6 +105,12 @@ impl<const N: usize> TryFrom<Vec<Pressure>> for FlowRates<N> {
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct AdjacentValves<const N: usize>([Vec<ValveIndex>; N]);
 
+impl<const N: usize> AdjacentValves<N> {
+    fn get(&self, valve: ValveIndex) -> &Vec<ValveIndex> {
+        &self.0[valve as usize]
+    }
+}
+
 impl<const N: usize> TryFrom<Vec<Vec<ValveIndex>>> for AdjacentValves<N> {
     type Error = Vec<Vec<ValveIndex>>;
 
@@ -180,7 +186,7 @@ impl<const N: usize> GameInfo<N> {
 
             reachable = reachable
                 .into_iter()
-                .flat_map(|valve| &self.adjacent_valves.0[valve])
+                .flat_map(|valve| self.adjacent_valves.get(valve))
                 .copied()
                 .collect();
         }
@@ -189,13 +195,14 @@ impl<const N: usize> GameInfo<N> {
     }
 
     fn flow_rate(&self, valve: ValveIndex) -> Pressure {
-        self.flow_rates.0[valve]
+        self.flow_rates.0[valve as usize]
     }
 
     #[cfg_attr(feature = "traced", instrument)]
     fn compute_move_map(&self) -> MoveMap {
-        let interesting_valves: Vec<_> =
-            (0..N).filter(|&valve| self.flow_rate(valve) > 0).collect();
+        let interesting_valves: Vec<_> = (0u8..N as u8)
+            .filter(|&valve| self.flow_rate(valve as ValveIndex) > 0)
+            .collect();
 
         interesting_valves
             .iter()
@@ -221,7 +228,7 @@ impl<const N: usize> GameInfo<N> {
         let index_map: HashMap<&str, ValveIndex> = parsed_valves
             .iter()
             .enumerate()
-            .map(|(index, parsed_valve)| (parsed_valve.name.as_str(), index))
+            .map(|(index, parsed_valve)| (parsed_valve.name.as_str(), index as ValveIndex))
             .collect();
 
         let adjacent_valves = parsed_valves
@@ -299,7 +306,7 @@ impl<const N: usize> PlayerState<N> {
         info: &GameInfo<N>,
         move_map: &MoveMap,
     ) -> ReachableValves {
-        (0..N)
+        (0u8..N as u8)
             // Only consider valves that are not opened yet and that have any flow
             .filter(|valve| {
                 !open_valves.contains(valve)
@@ -520,7 +527,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
 
         // We can go to the closed valves and open them to release more pressure
         // This is an upper bound, as we cannot go to multiple valves "at the same time"
-        let closed_valve_value = (0..N)
+        let closed_valve_value = (0u8..N as u8)
             // Only consider closed valves with flow
             .filter(|valve| !open_valves.contains(valve) && info.flow_rate(*valve) > 0)
             // Determine how quickly they can be reached
