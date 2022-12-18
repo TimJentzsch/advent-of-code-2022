@@ -9,7 +9,7 @@ use itertools::Itertools;
 #[cfg(feature = "traced")]
 use tracing::instrument;
 #[cfg(feature = "traced")]
-use tracing_flame::FlameLayer;
+use tracing_chrome::ChromeLayerBuilder;
 #[cfg(feature = "traced")]
 use tracing_subscriber::{fmt, prelude::*, registry::Registry};
 
@@ -648,7 +648,9 @@ impl Day for Day16 {
 
     fn run(&self) {
         #[cfg(feature = "traced")]
-        setup_global_subscriber();
+        let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
+        #[cfg(feature = "traced")]
+        tracing_subscriber::registry().with(chrome_layer).init();
 
         let input = self.get_input();
 
@@ -675,18 +677,6 @@ fn part_2<const N: usize>(input: &str) -> Pressure {
     let pressure_search = PressureReleaseSearch::new(info, move_map);
     let result = pressure_search.search::<2>();
     result.score()
-}
-
-#[cfg(feature = "traced")]
-fn setup_global_subscriber() -> impl Drop {
-    let fmt_layer = fmt::Layer::default();
-
-    let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
-
-    let subscriber = Registry::default().with(fmt_layer).with(flame_layer);
-
-    tracing::subscriber::set_global_default(subscriber).expect("Could not set global default");
-    _guard
 }
 
 #[cfg(test)]

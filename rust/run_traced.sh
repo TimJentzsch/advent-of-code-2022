@@ -1,4 +1,3 @@
-cargo build --release --features traced
-./target/release/rust
-cat tracing.folded | inferno-flamegraph > tracing-flamegraph.svg
-cat tracing.folded | inferno-flamegraph --flamechart > tracing-flamechart.svg
+cargo run --release --features traced
+echo ""
+echo "Open <chrome://tracing> or <https://ui.perfetto.dev/> and navigate to the <trace-*.json> file."
