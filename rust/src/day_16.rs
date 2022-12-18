@@ -456,21 +456,14 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         info: &GameInfo<N>,
         move_map: &MoveMap,
     ) -> Vec<[PlayerState<N>; P]> {
-        let next_player_states: [Vec<PlayerState<N>>; P] = self
-            .player_states
+        self.player_states
             .iter()
             .map(|player_state| {
                 player_state.expand(remaining_time, &self.open_valves, info, move_map)
             })
-            .collect_vec()
-            .try_into()
-            .unwrap();
-
-        next_player_states
-            .into_iter()
             .multi_cartesian_product()
             .map(|states| states.try_into().unwrap())
-            .collect()
+            .collect_vec()
     }
 
     #[cfg_attr(feature = "traced", instrument)]
