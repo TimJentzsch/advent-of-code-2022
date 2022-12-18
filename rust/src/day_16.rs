@@ -1,6 +1,6 @@
 use std::{
     collections::{BinaryHeap, HashMap},
-    slice::Iter,
+    ops::{Deref, DerefMut},
     str::FromStr,
 };
 
@@ -124,13 +124,23 @@ impl<const N: usize> TryFrom<Vec<Vec<ValveIndex>>> for AdjacentValves<N> {
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct OpenValves(Vec<ValveIndex>);
 
+impl Deref for OpenValves {
+    type Target = Vec<ValveIndex>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for OpenValves {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl OpenValves {
     fn new() -> Self {
         Self(Vec::new())
-    }
-
-    fn contains(&self, valve: &ValveIndex) -> bool {
-        self.0.contains(valve)
     }
 
     fn open(&mut self, valve: ValveIndex) {
@@ -138,23 +148,23 @@ impl OpenValves {
             self.0.push(valve);
         }
     }
-
-    fn iter(&self) -> Iter<'_, ValveIndex> {
-        self.0.iter()
-    }
 }
 
 /// A list of valves that are still reachable, and the time it takes to reach them.
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct ReachableValves(Vec<(ValveIndex, Time)>);
 
-impl ReachableValves {
-    fn iter(&self) -> Iter<'_, (ValveIndex, Time)> {
-        self.0.iter()
-    }
+impl Deref for ReachableValves {
+    type Target = Vec<(ValveIndex, Time)>;
 
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ReachableValves {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
