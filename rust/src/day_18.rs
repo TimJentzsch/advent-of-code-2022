@@ -62,6 +62,103 @@ impl Droplets {
             })
             .sum()
     }
+
+    fn exterior_surface_area(&self) -> usize {
+        // TODO: There can also be holes in the cube that are not closed up
+        let mut surface_area = 0;
+
+        let ((x_min, y_min, z_min), (x_max, y_max, z_max)) = self.iter().fold(
+            (
+                (Coord::MAX, Coord::MAX, Coord::MAX),
+                (Coord::MIN, Coord::MIN, Coord::MIN),
+            ),
+            |((x_min, y_min, z_min), (x_max, y_max, z_max)), droplet| {
+                (
+                    (
+                        x_min.min(droplet.0),
+                        y_min.min(droplet.1),
+                        z_min.min(droplet.2),
+                    ),
+                    (
+                        x_max.max(droplet.0),
+                        y_max.max(droplet.1),
+                        z_max.max(droplet.2),
+                    ),
+                )
+            },
+        );
+
+        // Check surfaces on x-axis
+        for y in y_min..=y_max {
+            for z in z_min..=z_max {
+                for x in (x_min - 1)..=(x_max + 1) {
+                    let droplet = Droplet(x, y, z);
+
+                    if self.binary_search(&droplet).is_ok() {
+                        surface_area += 1;
+                        break;
+                    }
+                }
+
+                for x in ((x_min - 1)..=(x_max + 1)).rev() {
+                    let droplet = Droplet(x, y, z);
+
+                    if self.binary_search(&droplet).is_ok() {
+                        surface_area += 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Check surfaces on y-axis
+        for x in x_min..=x_max {
+            for z in z_min..=z_max {
+                for y in (y_min - 1)..=(y_max + 1) {
+                    let droplet = Droplet(x, y, z);
+
+                    if self.binary_search(&droplet).is_ok() {
+                        surface_area += 1;
+                        break;
+                    }
+                }
+
+                for y in ((y_min - 1)..=(y_max + 1)).rev() {
+                    let droplet = Droplet(x, y, z);
+
+                    if self.binary_search(&droplet).is_ok() {
+                        surface_area += 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Check surfaces on x-axis
+        for x in x_min..=x_max {
+            for y in y_min..=y_max {
+                for z in (z_min - 1)..=(z_max + 1) {
+                    let droplet = Droplet(x, y, z);
+
+                    if self.binary_search(&droplet).is_ok() {
+                        surface_area += 1;
+                        break;
+                    }
+                }
+
+                for z in ((z_min - 1)..=(z_max + 1)).rev() {
+                    let droplet = Droplet(x, y, z);
+
+                    if self.binary_search(&droplet).is_ok() {
+                        surface_area += 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        surface_area
+    }
 }
 
 impl Deref for Droplets {
@@ -115,8 +212,9 @@ fn part_1(input: &str) -> usize {
     droplets.surface_area()
 }
 
-fn part_2(_input: &str) -> usize {
-    0
+fn part_2(input: &str) -> usize {
+    let droplets: Droplets = input.parse().unwrap();
+    droplets.exterior_surface_area()
 }
 
 #[cfg(test)]
@@ -149,6 +247,6 @@ mod tests {
     fn should_calculate_part_2_solution() {
         let actual = part_2(EXAMPLE_INPUT);
 
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 58);
     }
 }
