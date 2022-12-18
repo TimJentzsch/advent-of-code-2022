@@ -7,6 +7,10 @@ use std::{
 use itertools::Itertools;
 use tracing::instrument;
 
+use std::{fs::File, io::BufWriter};
+use tracing_flame::FlameLayer;
+use tracing_subscriber::{fmt, prelude::*, registry::Registry};
+
 use crate::utils::Day;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -614,6 +618,7 @@ impl Day for Day16 {
     }
 
     fn run(&self) {
+        setup_global_subscriber();
         let input = self.get_input();
 
         println!("Part 1: {}", part_1::<59>(&input));
@@ -639,6 +644,17 @@ fn part_2<const N: usize>(input: &str) -> Pressure {
     let pressure_search = PressureReleaseSearch::new(info, move_map);
     let result = pressure_search.search::<2>();
     result.score()
+}
+
+fn setup_global_subscriber() -> impl Drop {
+    let fmt_layer = fmt::Layer::default();
+
+    let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+
+    let subscriber = Registry::default().with(fmt_layer).with(flame_layer);
+
+    tracing::subscriber::set_global_default(subscriber).expect("Could not set global default");
+    _guard
 }
 
 #[cfg(test)]
