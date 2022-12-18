@@ -7,7 +7,6 @@ use std::{
 use itertools::Itertools;
 use tracing::instrument;
 
-use std::{fs::File, io::BufWriter};
 use tracing_flame::FlameLayer;
 use tracing_subscriber::{fmt, prelude::*, registry::Registry};
 
@@ -427,13 +426,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
     }
 
     #[instrument]
-    fn expand(&mut self, info: &GameInfo<N>, move_map: &MoveMap) -> Vec<GameState<N, P>> {
-        // Pass time until the next action and release pressure from the open valves
-        self.tick_to_next_action(info);
-
-        let remaining_time = info.total_time.saturating_sub(self.cur_minute);
-
-        // Update reachable valves
+    fn update_reachable_valves(&mut self) {
         self.player_states.iter_mut().for_each(|player_state| {
             // If the reachable valves contained a valve that was just opened, remove it
             if player_state
@@ -451,7 +444,15 @@ impl<const N: usize, const P: usize> GameState<N, P> {
                 );
             }
         });
+    }
 
+    #[instrument]
+    fn next_player_states(
+        &self,
+        remaining_time: Time,
+        info: &GameInfo<N>,
+        move_map: &MoveMap,
+    ) -> Vec<[PlayerState<N>; P]> {
         let next_player_states: [Vec<PlayerState<N>>; P] = self
             .player_states
             .iter()
@@ -462,14 +463,20 @@ impl<const N: usize, const P: usize> GameState<N, P> {
             .try_into()
             .unwrap();
 
-        let next_player_states: Vec<[PlayerState<N>; P]> = next_player_states
+        next_player_states
             .into_iter()
             .multi_cartesian_product()
             .map(|states| states.try_into().unwrap())
-            .collect();
+            .collect()
+    }
 
-        // println!("Next player states: {next_player_states:?}");
-
+    #[instrument]
+    fn next_game_states(
+        &self,
+        remaining_time: Time,
+        next_player_states: Vec<[PlayerState<N>; P]>,
+        info: &GameInfo<N>,
+    ) -> Vec<GameState<N, P>> {
         next_player_states
             .into_iter()
             .map(|player_states| {
@@ -484,6 +491,20 @@ impl<const N: usize, const P: usize> GameState<N, P> {
                 state
             })
             .collect()
+    }
+
+    #[instrument]
+    fn expand(&mut self, info: &GameInfo<N>, move_map: &MoveMap) -> Vec<GameState<N, P>> {
+        // Pass time until the next action and release pressure from the open valves
+        self.tick_to_next_action(info);
+
+        let remaining_time = info.total_time.saturating_sub(self.cur_minute);
+
+        self.update_reachable_valves();
+
+        let next_player_states = self.next_player_states(remaining_time, info, move_map);
+
+        self.next_game_states(remaining_time, next_player_states, info)
     }
 
     #[instrument]
