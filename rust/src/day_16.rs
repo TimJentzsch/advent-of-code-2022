@@ -259,8 +259,6 @@ struct PlayerState<const N: usize> {
     next_valve: ValveIndex,
     time_to_reach: Time,
 
-    turned_on_valves: Vec<ValveIndex>,
-
     /// The valves that are still reachable within the remaining time and the time it takes to reach them.
     reachable_valves: ReachableValves,
 }
@@ -275,7 +273,6 @@ impl<const N: usize> PlayerState<N> {
         Self {
             next_valve: 0,
             time_to_reach: 0,
-            turned_on_valves: Vec::new(),
             reachable_valves,
         }
     }
@@ -291,7 +288,6 @@ impl<const N: usize> PlayerState<N> {
     #[cfg_attr(feature = "traced", instrument)]
     fn execute_action(&mut self, open_valves: &mut OpenValves) {
         open_valves.open(self.next_valve);
-        self.turned_on_valves.push(self.next_valve);
     }
 
     #[cfg_attr(feature = "traced", instrument)]
@@ -353,7 +349,6 @@ impl<const N: usize> PlayerState<N> {
                     Self {
                         next_valve,
                         time_to_reach,
-                        turned_on_valves: self.turned_on_valves.clone(),
                         reachable_valves: next_reachable_valves,
                     }
                 })
@@ -722,7 +717,6 @@ Valve JJ has flow rate=21; tunnel leads to valve II
         let state = PlayerState::<3> {
             next_valve: 2,
             time_to_reach: 1,
-            turned_on_valves: Vec::new(),
             reachable_valves: ReachableValves(vec![]),
         };
 
@@ -746,7 +740,6 @@ Valve JJ has flow rate=21; tunnel leads to valve II
         let state = PlayerState::<3> {
             next_valve: 2,
             time_to_reach: 0,
-            turned_on_valves: Vec::new(),
             reachable_valves: ReachableValves(vec![(0, 2), (1, 3)]),
         };
 
@@ -769,13 +762,11 @@ Valve JJ has flow rate=21; tunnel leads to valve II
             PlayerState::<3> {
                 next_valve: 0,
                 time_to_reach: 2,
-                turned_on_valves: Vec::new(),
                 reachable_valves: ReachableValves(vec![(1, 3)]),
             },
             PlayerState::<3> {
                 next_valve: 1,
                 time_to_reach: 3,
-                turned_on_valves: Vec::new(),
                 reachable_valves: ReachableValves(vec![(0, 2)]),
             },
         ];
