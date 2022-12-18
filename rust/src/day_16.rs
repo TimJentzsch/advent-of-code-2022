@@ -5,6 +5,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use tracing::instrument;
 
 use crate::utils::Day;
 
@@ -26,6 +27,7 @@ struct ParsedValve {
 impl FromStr for ParsedValve {
     type Err = ParseError;
 
+    #[instrument]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let tokens = &mut s.split_ascii_whitespace();
 
@@ -160,6 +162,7 @@ struct GameInfo<const N: usize> {
 }
 
 impl<const N: usize> GameInfo<N> {
+    #[instrument]
     fn move_time(&self, from: ValveIndex, to: ValveIndex) -> Time {
         // TODO: Make this more efficient
         let mut reachable = vec![from];
@@ -183,6 +186,7 @@ impl<const N: usize> GameInfo<N> {
         self.flow_rates.0[valve]
     }
 
+    #[instrument]
     fn compute_move_map(&self) -> MoveMap {
         let interesting_valves: Vec<_> =
             (0..N).filter(|&valve| self.flow_rate(valve) > 0).collect();
@@ -198,6 +202,7 @@ impl<const N: usize> GameInfo<N> {
             .collect()
     }
 
+    #[instrument]
     fn from_str(s: &str, total_time: Time) -> Result<Self, ParseError> {
         let mut parsed_valves = s
             .trim()
@@ -255,6 +260,7 @@ struct PlayerState<const N: usize> {
 }
 
 impl<const N: usize> PlayerState<N> {
+    #[instrument]
     fn start(info: &GameInfo<N>, move_map: &MoveMap) -> Self {
         let open_valves = OpenValves::new();
         let reachable_valves =
@@ -276,11 +282,13 @@ impl<const N: usize> PlayerState<N> {
         self.time_to_reach == 0
     }
 
+    #[instrument]
     fn execute_action(&mut self, open_valves: &mut OpenValves) {
         open_valves.open(self.next_valve);
         self.turned_on_valves.push(self.next_valve);
     }
 
+    #[instrument]
     fn calculate_reachable_valves(
         remaining_time: Time,
         cur_valve: ValveIndex,
@@ -312,6 +320,7 @@ impl<const N: usize> PlayerState<N> {
             .collect()
     }
 
+    #[instrument]
     fn expand(
         &self,
         remaining_time: Time,
@@ -380,6 +389,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         }
     }
 
+    #[instrument]
     fn tick_to_next_action(&mut self, info: &GameInfo<N>) {
         let tick_time = self
             .player_states
@@ -404,6 +414,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
         });
     }
 
+    #[instrument]
     fn released_pressure(&self, time: Time, info: &GameInfo<N>) -> Pressure {
         self.open_valves
             .iter()
@@ -411,6 +422,7 @@ impl<const N: usize, const P: usize> GameState<N, P> {
             .sum()
     }
 
+    #[instrument]
     fn expand(&mut self, info: &GameInfo<N>, move_map: &MoveMap) -> Vec<GameState<N, P>> {
         // Pass time until the next action and release pressure from the open valves
         self.tick_to_next_action(info);
@@ -470,12 +482,14 @@ impl<const N: usize, const P: usize> GameState<N, P> {
             .collect()
     }
 
+    #[instrument]
     fn is_leaf(&self) -> bool {
         self.player_states
             .iter()
             .all(|p| p.reachable_valves.is_empty())
     }
 
+    #[instrument]
     fn calculate_heuristic(
         remaining_time: Time,
         player_states: &[PlayerState<N>; P],
@@ -569,6 +583,7 @@ impl<const N: usize> PressureReleaseSearch<N> {
         Self { info, move_map }
     }
 
+    #[instrument]
     fn search<const P: usize>(&self) -> GameState<N, P> {
         // Do a modified A* search
         let mut open_set: BinaryHeap<GameState<N, P>> = BinaryHeap::new();
@@ -606,6 +621,7 @@ impl Day for Day16 {
     }
 }
 
+#[instrument]
 fn part_1<const N: usize>(input: &str) -> Pressure {
     let info = GameInfo::<N>::from_str(input, 30).unwrap();
     let move_map = info.compute_move_map();
@@ -615,6 +631,7 @@ fn part_1<const N: usize>(input: &str) -> Pressure {
     result.score()
 }
 
+#[instrument]
 fn part_2<const N: usize>(input: &str) -> Pressure {
     let info: GameInfo<N> = GameInfo::<N>::from_str(input, 26).unwrap();
     let move_map = info.compute_move_map();
